@@ -11,6 +11,16 @@ from app.schemas.user import UserCreate, UserLogin, UserResponse, TokenResponse
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _extract_token(authorization: Optional[str] = Header(None)) -> str:
+    """Extract Bearer token from Authorization header."""
+    if authorization is None or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header",
+        )
+    return authorization[7:]
+
+
 def get_current_user(db: Session = Depends(get_db), token: str = Depends(_extract_token)) -> User:
     """Dependency — validates JWT and returns the current user."""
     payload = decode_access_token(token)
@@ -25,16 +35,6 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(_extrac
     return user
 
 
-def _extract_token(authorization: Optional[str] = Header(None)) -> str:
-    """Extract Bearer token from Authorization header."""
-    if authorization is None or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid Authorization header",
-        )
-    return authorization[7:]
-
-
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(data: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == data.username).first():
@@ -45,7 +45,7 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
     user = User(
         username=data.username,
         email=data.email,
-        hashed_password=hash_password(data.password),
+        password_hash=hash_password(data.password),
     )
     db.add(user)
     db.commit()
@@ -56,7 +56,7 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == data.username).first()
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     token = create_access_token({"sub": str(user.id)})
@@ -69,3 +69,9 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+def logout(current_user: User = Depends(get_current_user)):
+    """V1: stateless logout — frontend discards the token."""
+    return {"message": "Logged out successfully"}

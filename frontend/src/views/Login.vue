@@ -1,30 +1,25 @@
 <template>
-  <div class="login-container">
-    <el-card class="login-card">
-      <h2 class="title">ResearchPilot</h2>
-      <el-form
-        ref="formRef"
-        :model="form"
-        :rules="rules"
-        label-width="0"
-        size="large"
-        @keyup.enter="handleLogin"
-      >
+  <div class="auth-page">
+    <div class="auth-bg" />
+    <el-card class="auth-card" shadow="always">
+      <div class="auth-header">
+        <div class="auth-logo">RP</div>
+        <h2>ResearchPilot</h2>
+        <p class="auth-sub">学术论文管理平台</p>
+      </div>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="0" size="large" @keyup.enter="handleLogin">
         <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="用户名" />
+          <el-input v-model="form.username" placeholder="用户名" prefix-icon="User" />
         </el-form-item>
         <el-form-item prop="password">
-          <el-input v-model="form.password" type="password" placeholder="密码" show-password />
+          <el-input v-model="form.password" type="password" placeholder="密码" show-password prefix-icon="Lock" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" class="submit-btn" @click="handleLogin">
-            登录
-          </el-button>
+          <el-button type="primary" :loading="loading" class="submit-btn" @click="handleLogin">登录</el-button>
         </el-form-item>
       </el-form>
-      <div class="register-link">
-        还没有账号？
-        <router-link to="/register">立即注册</router-link>
+      <div class="auth-footer">
+        还没有账号？<router-link to="/register">立即注册</router-link>
       </div>
     </el-card>
   </div>
@@ -43,11 +38,7 @@ const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
-const form = reactive({
-  username: '',
-  password: '',
-})
-
+const form = reactive({ username: '', password: '' })
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
@@ -56,7 +47,6 @@ const rules: FormRules = {
 async function handleLogin() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
-
   loading.value = true
   try {
     const res = await userApi.login(form)
@@ -64,36 +54,74 @@ async function handleLogin() {
     userStore.setUser(res.data.user)
     ElMessage.success('登录成功')
     router.push('/dashboard')
-  } catch {
-    // error handled by interceptor
-  } finally {
-    loading.value = false
-  }
+  } catch { /* handled by interceptor */ }
+  finally { loading.value = false }
 }
 </script>
 
 <style scoped>
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.auth-page {
   min-height: 100vh;
-  background: #f5f7fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  position: relative;
+  overflow: hidden;
 }
-.login-card {
+
+.auth-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.15) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 50%, rgba(139, 92, 246, 0.15) 0%, transparent 60%);
+}
+
+.auth-card {
   width: 400px;
+  position: relative;
+  border-radius: 16px !important;
+  padding: 8px;
 }
-.title {
+
+.auth-header {
   text-align: center;
-  margin-bottom: 24px;
-  color: #409eff;
+  margin-bottom: 28px;
 }
-.submit-btn {
-  width: 100%;
+
+.auth-logo {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
 }
-.register-link {
+
+.auth-header h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: #1e293b;
+}
+
+.auth-sub {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.submit-btn { width: 100%; }
+
+.auth-footer {
   text-align: center;
   font-size: 14px;
-  color: #666;
+  color: #64748b;
 }
+.auth-footer a { color: #3b82f6; font-weight: 500; }
 </style>

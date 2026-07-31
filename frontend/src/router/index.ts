@@ -2,10 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 
 const routes: RouteRecordRaw[] = [
-  {
-    path: '/',
-    redirect: '/dashboard',
-  },
+  // ── Public routes ──
   {
     path: '/login',
     name: 'Login',
@@ -18,29 +15,21 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Register.vue'),
     meta: { requiresAuth: false },
   },
+
+  // ── Authenticated routes (wrapped in AppLayout) ──
   {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('@/views/Dashboard.vue'),
+    path: '/',
+    component: () => import('@/components/AppLayout.vue'),
     meta: { requiresAuth: true },
-  },
-  {
-    path: '/projects',
-    name: 'Projects',
-    component: () => import('@/views/Projects.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/project/:id',
-    name: 'ProjectDetail',
-    component: () => import('@/views/ProjectDetail.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/settings',
-    name: 'Settings',
-    component: () => import('@/views/Settings.vue'),
-    meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: { name: 'Dashboard' } },
+      { path: 'dashboard', name: 'Dashboard', component: () => import('@/views/Dashboard.vue') },
+      { path: 'projects', name: 'Projects', component: () => import('@/views/Projects.vue') },
+      { path: 'project/:id', name: 'ProjectDetail', component: () => import('@/views/ProjectDetail.vue') },
+      { path: 'settings', name: 'Settings', component: () => import('@/views/Settings.vue') },
+      { path: 'upload', name: 'Upload', component: () => import('@/views/UploadPaper.vue') },
+      { path: 'paper/:id', name: 'PaperReading', component: () => import('@/views/PaperReading.vue') },
+    ],
   },
 ]
 

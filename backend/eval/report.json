@@ -1,0 +1,196 @@
+{
+  "qa_count": 16,
+  "top_k": 5,
+  "retrieval": {
+    "pure_vector": {
+      "hit_rate": 81.2,
+      "mrr": 0.75
+    },
+    "hybrid": {
+      "hit_rate": 100.0,
+      "mrr": 0.825
+    }
+  },
+  "generation": {
+    "faithfulness": 0.9375,
+    "answer_correctness": 4.88
+  },
+  "cases": [
+    {
+      "id": 1,
+      "question": "What is RAG?",
+      "gt_chunk": 33,
+      "vec_rank": 0,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据提供的论文片段，RAG（Retrieval-Augmented Generation）是一种检索增强生成模型，它结合了预训练的参数化记忆（parametric memory）和非参数化记忆（non-parametric memory）用于语言生成 [2]。具体来说，RAG 的参数化记忆是一个预训练的 seq2seq 模型，非参数化记忆是维基百科的密集向量索引，通过预训练的神经检索器访问 [2]",
+      "elapsed": 7.9
+    },
+    {
+      "id": 2,
+      "question": "How are the BART generator parameters used as parametric memory in RAG?",
+      "gt_chunk": 20,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据提供的论文片段，BART生成器参数θ被称为“parametric memory”（参数化记忆）[1]。在RAG中，BART生成器通过连接检索到的文档和输入来生成输出，其参数作为参数化记忆组件使用[1]。此外，RAG模型结合了参数化记忆（如BART）和非参数化记忆（如检索索引），两者都是预训练并预加载了广泛知识[2]。具体来说，BART生成器参数θ在训练和生成过程中被用作参数化记忆，与检索组件联",
+      "elapsed": 7.4
+    },
+    {
+      "id": 3,
+      "question": "What does the non-parametric memory index consist of and how is it stored?",
+      "gt_chunk": 124,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，非参数记忆索引不包含可训练参数，但由 2100 万个 728 维向量组成，包含 153 亿个值。这些向量可以以 8 位浮点精度存储，以管理内存和磁盘占用 [1]。",
+      "elapsed": 7.7
+    },
+    {
+      "id": 4,
+      "question": "What is the difference between RAG-Sequence and RAG-Token?",
+      "gt_chunk": 15,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，RAG-Sequence 和 RAG-Token 的主要区别在于它们如何利用检索到的文档来生成目标文本：\n\n- **RAG-Sequence**：使用同一个检索到的文档来预测每个目标 token。它将检索到的文档视为一个单一的潜在变量，通过 top-K 近似来边缘化，以得到序列到序列的概率 p(y|x) [1]。\n- **RAG-Token**：可以基于不同的文档来预测每个目标 to",
+      "elapsed": 7.8
+    },
+    {
+      "id": 5,
+      "question": "What datasets are used for the open-domain QA experiments?",
+      "gt_chunk": 25,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，开放域问答实验使用了四个数据集：Natural Questions (NQ) [29]、TriviaQA (TQA) [24]、WebQuestions (WQ) [3] 和 CuratedTrec (CT) [2] [1][3]。",
+      "elapsed": 6.0
+    },
+    {
+      "id": 6,
+      "question": "How is the retriever initialized and trained?",
+      "gt_chunk": 19,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，检索器（retriever）使用预训练的DPR（Dense Passage Retriever）的bi-encoder进行初始化，并用于构建文档索引。该检索器经过训练，能够检索包含TriviaQA [24] 和 Natural Questions [29] 问题答案的文档 [1]。此外，片段提到RAG的检索器使用DPR的检索器进行初始化，而DPR的检索器使用了Natural Ques",
+      "elapsed": 9.8
+    },
+    {
+      "id": 7,
+      "question": "Which pre-trained seq2seq transformer is used for the generator component?",
+      "gt_chunk": 19,
+      "vec_rank": 0,
+      "hyb_rank": 3,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，生成器组件使用的是 BART-large，一个预训练的 seq2seq transformer，具有 400M 参数 [3]。",
+      "elapsed": 7.2
+    },
+    {
+      "id": 8,
+      "question": "What is the null document mechanism in RAG?",
+      "gt_chunk": 120,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据提供的论文片段，null document 机制是在 RAG 中引入的一种方法，用于处理给定输入无法检索到有用信息的情况。具体来说，如果检索到 k 个文档，模型会额外“检索”一个空文档，并预测该空文档的 logit，然后在 k+1 个预测上进行边缘化 [1]。论文探索了三种建模该空文档 logit 的方式：(i) 学习空文档的文档嵌入，(ii) 静态学习的偏置项，或 (iii) 用神经网络预测",
+      "elapsed": 7.8
+    },
+    {
+      "id": 9,
+      "question": "How was BART pre-trained for use in RAG?",
+      "gt_chunk": 20,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，BART是通过“denoising objective and a variety of different noising functions”进行预训练的 [1][3]。具体来说，片段提到“BART was pre-trained using a denoising objective and a variety of different noising functions” [",
+      "elapsed": 8.8
+    },
+    {
+      "id": 10,
+      "question": "How does RAG compare to parametric-only approaches?",
+      "gt_chunk": 33,
+      "vec_rank": 2,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据提供的论文片段，RAG 与纯参数化（parametric-only）方法相比，具有显著优势。具体来说：\n\n- RAG 结合了“闭卷”（纯参数化）方法的生成灵活性和“开卷”（基于检索）方法的性能，且无需像 REALM 和 T5+SSM 那样进行昂贵的“显著跨度掩码”预训练 [1]。\n- 在开放域问答中，RAG 模型取得了最先进的结果 [2]。\n- 在参数效率方面，最佳纯参数化模型 T5-11B ",
+      "elapsed": 10.2
+    },
+    {
+      "id": 11,
+      "question": "What is RAG's performance on TriviaQA and FEVER?",
+      "gt_chunk": 11,
+      "vec_rank": 0,
+      "hyb_rank": 3,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，RAG在TriviaQA上“strongly outperform recent approaches that use specialised pre-training objectives on TriviaQA [24]”（[3]段）。在FEVER事实验证任务上，“achieve results within 4.3% of state-of-the-art pipeline ",
+      "elapsed": 7.8
+    },
+    {
+      "id": 12,
+      "question": "What task is MSMARCO NLG v2.1 used for in the paper?",
+      "gt_chunk": 26,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，MSMARCO NLG task v2.1 被用于测试 RAG 在知识密集型环境下的自然语言生成（NLG）能力，具体是作为开放域抽象式问答（open-domain abstractive QA）任务来处理的 [1]。",
+      "elapsed": 8.3
+    },
+    {
+      "id": 13,
+      "question": "What evaluation metric is reported for open-domain question answering?",
+      "gt_chunk": 25,
+      "vec_rank": 2,
+      "hyb_rank": 5,
+      "faithfulness": 0.0,
+      "correctness": 3.0,
+      "answer": "根据提供的论文片段，对于开放域问答（open-domain QA）任务，论文提到“We compare RAG to the popular extractive QA paradigm... We also compare to ‘Closed-Book QA’ approaches... We consider four popular open-domain QA datasets: Nat",
+      "elapsed": 9.2
+    },
+    {
+      "id": 14,
+      "question": "How can RAG be fine-tuned to new tasks?",
+      "gt_chunk": 9,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，RAG 可以在任何 seq2seq 任务上进行微调，其中生成器和检索器会共同学习 [1]。具体来说，RAG 的微调方式类似于 T5 或 BART，适用于序列到序列任务，并且在此过程中，生成器和检索器是联合训练的 [1]。",
+      "elapsed": 6.4
+    },
+    {
+      "id": 15,
+      "question": "How does external knowledge help RAG hallucinate less?",
+      "gt_chunk": 66,
+      "vec_rank": 1,
+      "hyb_rank": 1,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据论文片段，外部知识（如维基百科）帮助RAG减少“幻觉”的原因是：它使模型“更强烈地基于真实的事实知识”，从而生成的文本“更符合事实”，并“减少幻觉” [1][3]。具体来说，RAG通过结合外部知识源（如维基百科）来增强生成内容的真实性，使其更少产生不实或虚构的信息 [1]。",
+      "elapsed": 7.0
+    },
+    {
+      "id": 16,
+      "question": "What main results does RAG achieve on open-domain QA?",
+      "gt_chunk": 64,
+      "vec_rank": 1,
+      "hyb_rank": 3,
+      "faithfulness": 1.0,
+      "correctness": 5.0,
+      "answer": "根据提供的论文片段，RAG在开放域问答上的主要结果包括：\n\n- RAG-Sequence在Natural Questions上达到44.5的EM分数，而参数数量相近的T5-large（770M参数）仅达到28.9 EM，表明混合参数/非参数模型在开放域问答中需要更少的可训练参数即可获得强性能 [2]。\n- RAG模型在开放域问答上取得了最先进的结果 [3]。\n- 人们更偏好RAG的生成结果，而非纯",
+      "elapsed": 9.3
+    }
+  ]
+}

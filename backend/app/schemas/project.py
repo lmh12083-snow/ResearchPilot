@@ -16,9 +16,10 @@ class ProjectUpdate(BaseModel):
 
 class ProjectResponse(BaseModel):
     id: int
+    user_id: int
     name: str
     description: Optional[str]
-    owner_id: int
+    paper_count: int = 0
     created_at: datetime
     updated_at: datetime
 

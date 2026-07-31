@@ -35,4 +35,8 @@ export const userApi = {
   getProfile() {
     return request.get<UserInfo>('/auth/me')
   },
+
+  logout() {
+    return request.post('/auth/logout')
+  },
 }

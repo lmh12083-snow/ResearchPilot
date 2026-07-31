@@ -1,0 +1,114 @@
+[
+  {
+    "id": 1,
+    "paper_id": 1,
+    "question": "What is RAG?",
+    "ground_truth_chunk": 33,
+    "reference": "RAG is a retrieval-augmented generation model that combines the generation flexibility of closed-book (parametric-only) approaches with the accuracy of retrieval-based approaches. It jointly trains a retriever and a generator."
+  },
+  {
+    "id": 2,
+    "paper_id": 1,
+    "question": "How are the BART generator parameters used as parametric memory in RAG?",
+    "ground_truth_chunk": 20,
+    "reference": "The BART generator parameters are referred to as the parametric memory of RAG. RAG combines this parametric memory with a non-parametric memory (the retrieved documents)."
+  },
+  {
+    "id": 3,
+    "paper_id": 1,
+    "question": "What does the non-parametric memory index consist of and how is it stored?",
+    "ground_truth_chunk": 124,
+    "reference": "The non-parametric memory index consists of 21 million 728-dimensional vectors (15.3B values). They are not trainable parameters and can be stored at 8-bit floating point precision to manage memory and disk footprints."
+  },
+  {
+    "id": 4,
+    "paper_id": 1,
+    "question": "What is the difference between RAG-Sequence and RAG-Token?",
+    "ground_truth_chunk": 15,
+    "reference": "RAG-Sequence uses the same retrieved document to generate the entire sequence (the document is a single latent variable). RAG-Token can predict each target token based on a different document."
+  },
+  {
+    "id": 5,
+    "paper_id": 1,
+    "question": "What datasets are used for the open-domain QA experiments?",
+    "ground_truth_chunk": 25,
+    "reference": "Four popular open-domain QA datasets: Natural Questions (NQ), TriviaQA (TQA), WebQuestions (WQ) and CuratedTrec (CT). Exact Match (EM) is reported."
+  },
+  {
+    "id": 6,
+    "paper_id": 1,
+    "question": "How is the retriever initialized and trained?",
+    "ground_truth_chunk": 19,
+    "reference": "The retriever is a pre-trained bi-encoder from DPR, trained to retrieve documents that contain answers to TriviaQA and Natural Questions. It is used to build the dense document index."
+  },
+  {
+    "id": 7,
+    "paper_id": 1,
+    "question": "Which pre-trained seq2seq transformer is used for the generator component?",
+    "ground_truth_chunk": 19,
+    "reference": "BART-large, a pre-trained sequence-to-sequence transformer. Any encoder-decoder could be used in principle."
+  },
+  {
+    "id": 8,
+    "paper_id": 1,
+    "question": "What is the null document mechanism in RAG?",
+    "ground_truth_chunk": 120,
+    "reference": "It models cases where no useful information could be retrieved. An empty document is 'retrieved' alongside the k real documents and the model marginalizes over k+1 predictions."
+  },
+  {
+    "id": 9,
+    "paper_id": 1,
+    "question": "How was BART pre-trained for use in RAG?",
+    "ground_truth_chunk": 20,
+    "reference": "BART was pre-trained using a denoising objective with a variety of different noising functions."
+  },
+  {
+    "id": 10,
+    "paper_id": 1,
+    "question": "How does RAG compare to parametric-only approaches?",
+    "ground_truth_chunk": 33,
+    "reference": "RAG combines the generation flexibility of closed-book (parametric-only) approaches with the accuracy of retrieval-based approaches, achieving more factual and controllable generation."
+  },
+  {
+    "id": 11,
+    "paper_id": 1,
+    "question": "What is RAG's performance on TriviaQA and FEVER?",
+    "ground_truth_chunk": 11,
+    "reference": "RAG strongly outperforms recent approaches using specialised pre-training objectives on TriviaQA, and for FEVER fact verification achieves results within 4.3% of state-of-the-art pipeline models that use strong retrieval supervision."
+  },
+  {
+    "id": 12,
+    "paper_id": 1,
+    "question": "What task is MSMARCO NLG v2.1 used for in the paper?",
+    "ground_truth_chunk": 26,
+    "reference": "To test RAG's natural language generation (NLG) in a knowledge-intensive setting, treating MSMARCO as an open-domain abstractive QA task."
+  },
+  {
+    "id": 13,
+    "paper_id": 1,
+    "question": "What evaluation metric is reported for open-domain question answering?",
+    "ground_truth_chunk": 25,
+    "reference": "Exact Match (EM) scores are reported for the open-domain QA datasets."
+  },
+  {
+    "id": 14,
+    "paper_id": 1,
+    "question": "How can RAG be fine-tuned to new tasks?",
+    "ground_truth_chunk": 9,
+    "reference": "Like T5 or BART, RAG can be fine-tuned on any seq2seq task, whereby both the generator and the retriever are jointly learned."
+  },
+  {
+    "id": 15,
+    "paper_id": 1,
+    "question": "How does external knowledge help RAG hallucinate less?",
+    "ground_truth_chunk": 66,
+    "reference": "Access to external knowledge (in this case Wikipedia) makes RAG hallucinate less, producing generations that are more factual and interpretable."
+  },
+  {
+    "id": 16,
+    "paper_id": 1,
+    "question": "What main results does RAG achieve on open-domain QA?",
+    "ground_truth_chunk": 64,
+    "reference": "RAG models obtain state of the art results on open-domain question answering."
+  }
+]

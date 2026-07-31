@@ -2,8 +2,10 @@ import request from './request'
 
 export interface Project {
   id: number
+  user_id: number
   name: string
   description: string
+  paper_count: number
   created_at: string
   updated_at: string
 }
