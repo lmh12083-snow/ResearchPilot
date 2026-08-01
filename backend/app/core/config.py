@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     WEB_SEARCH_PROVIDER: str = "duckduckgo"  # duckduckgo | bing
     BING_SEARCH_API_KEY: str = ""  # https://portal.azure.com -> Cognitive Services
 
+    # Paper comparison
+    COMPARE_MAX_PAPERS: int = 5  # max papers in one comparison
+
     model_config = {"env_file": "../.env", "case_sensitive": True}
 
 

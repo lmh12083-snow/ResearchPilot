@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.api import auth, project, paper, dashboard, llm
+from app.api import auth, project, paper, dashboard, llm, eval as eval_api, notes
 
 
 def create_app() -> FastAPI:
@@ -34,6 +34,8 @@ def create_app() -> FastAPI:
     app.include_router(paper.router, prefix=settings.API_V1_PREFIX)
     app.include_router(dashboard.router, prefix=settings.API_V1_PREFIX)
     app.include_router(llm.router, prefix=settings.API_V1_PREFIX)
+    app.include_router(eval_api.router, prefix=settings.API_V1_PREFIX)
+    app.include_router(notes.router, prefix=settings.API_V1_PREFIX)
 
     # Preload the cross-encoder reranker in the background so the first chat
     # after startup isn't slowed by model loading. Never blocks startup.

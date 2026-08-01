@@ -137,8 +137,16 @@ export interface ChatStreamHandlers {
 
 // ── Paper Comparison ───────────────────────────────────────────
 
+export interface ComparePaperOverview {
+  paper_id: number
+  title: string
+  summary: string
+}
+
 export interface CompareResult {
-  overview: string | null
+  // Per-paper one-line overviews (one entry per compared paper).
+  papers: ComparePaperOverview[]
+  // Cross-cutting comparison sections (text, papers attributed by name).
   similarities: string | null
   method_differences: string | null
   experiment_differences: string | null
@@ -297,8 +305,143 @@ export const paperApi = {
     return request.get<ChatMessage[]>(`/papers/${paperId}/chat`)
   },
 
-  /** Generate a structured comparison of two papers. */
+  /** Generate a structured comparison of 2..5 papers (single LLM call). */
   comparePapers(paperIds: number[]) {
     return request.post<CompareResult>('/papers/compare', { paper_ids: paperIds })
+  },
+
+  /**
+   * Multi-agent comparison via SSE (Planner → parallel Specialists →
+   * Aggregator). Events: status* → done / error.
+   */
+  async comparePapersStream(
+    paperIds: number[],
+    handlers: {
+      onStatus?: (text: string) => void
+      onResult: (result: CompareResult) => void
+      onError?: (detail: string) => void
+    },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const token = localStorage.getItem('token') || ''
+    const resp = await fetch(`/api/v1/papers/compare/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ paper_ids: paperIds }),
+      signal,
+    })
+
+    if (!resp.ok) {
+      let detail = '对比失败'
+      try {
+        const err = await resp.json()
+        detail = err?.detail || detail
+      } catch { /* ignore */ }
+      throw new Error(detail)
+    }
+    if (!resp.body) throw new Error('响应流不可用')
+
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    const onError = handlers.onError || (() => {})
+
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      let idx: number
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const raw = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+
+        let event = 'message'
+        let dataStr = ''
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) dataStr += line.slice(5).trim()
+        }
+        if (!dataStr) continue
+
+        let payload: any
+        try { payload = JSON.parse(dataStr) } catch { continue }
+
+        if (event === 'status') handlers.onStatus?.(payload.text)
+        else if (event === 'done') handlers.onResult(payload.result)
+        else if (event === 'error') onError(payload.detail)
+      }
+    }
+  },
+
+  /**
+   * Generate a literature review for selected project papers via SSE.
+   * Events: status* → done {markdown} / error.
+   */
+  async reviewStream(
+    projectId: number,
+    paperIds: number[],
+    handlers: {
+      onStatus?: (text: string) => void
+      onResult: (markdown: string) => void
+      onError?: (detail: string) => void
+    },
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const token = localStorage.getItem('token') || ''
+    const resp = await fetch(`/api/v1/projects/${projectId}/review/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ paper_ids: paperIds }),
+      signal,
+    })
+
+    if (!resp.ok) {
+      let detail = '综述生成失败'
+      try {
+        const err = await resp.json()
+        detail = err?.detail || detail
+      } catch { /* ignore */ }
+      throw new Error(detail)
+    }
+    if (!resp.body) throw new Error('响应流不可用')
+
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    const onError = handlers.onError || (() => {})
+
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      let idx: number
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const raw = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+
+        let event = 'message'
+        let dataStr = ''
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) dataStr += line.slice(5).trim()
+        }
+        if (!dataStr) continue
+
+        let payload: any
+        try { payload = JSON.parse(dataStr) } catch { continue }
+
+        if (event === 'status') handlers.onStatus?.(payload.text)
+        else if (event === 'done') handlers.onResult(payload.markdown)
+        else if (event === 'error') onError(payload.detail)
+      }
+    }
   },
 }

@@ -164,8 +164,20 @@ class CompareRequest(BaseModel):
     paper_ids: list[int]
 
 
+class ReviewRequest(BaseModel):
+    paper_ids: list[int]
+
+
+class ComparePaperOverview(BaseModel):
+    paper_id: int
+    title: str
+    summary: str
+
+
 class CompareResponse(BaseModel):
-    overview: Optional[str] = None
+    # Per-paper one-line overviews (one entry per compared paper).
+    papers: list[ComparePaperOverview] = []
+    # Cross-cutting comparison sections (text, papers attributed by name).
     similarities: Optional[str] = None
     method_differences: Optional[str] = None
     experiment_differences: Optional[str] = None

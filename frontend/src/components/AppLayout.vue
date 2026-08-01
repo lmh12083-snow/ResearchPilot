@@ -3,7 +3,10 @@
     <!-- Left sidebar navigation -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="avatar">{{ userInitial }}</div>
+        <div class="avatar">
+          <img v-if="userStore.user?.avatar" :src="avatarSrc" alt="avatar" class="avatar-img" />
+          <span v-else>{{ userInitial }}</span>
+        </div>
         <div class="user-name">{{ userStore.user?.username || 'User' }}</div>
       </div>
 
@@ -25,6 +28,10 @@
         <el-menu-item index="/upload">
           <el-icon><Upload /></el-icon>
           <span>上传论文</span>
+        </el-menu-item>
+        <el-menu-item index="/eval">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>RAG 评测</span>
         </el-menu-item>
         <el-menu-item index="/settings">
           <el-icon><Setting /></el-icon>
@@ -57,7 +64,7 @@ import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { userApi } from '@/api/user'
-import { Grid, FolderOpened, Upload, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { Grid, FolderOpened, Upload, DataAnalysis, Setting, SwitchButton } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -74,6 +81,10 @@ const activeRoute = computed(() => {
 const userInitial = computed(() => {
   return (userStore.user?.username || 'U').charAt(0).toUpperCase()
 })
+
+const avatarSrc = computed(() =>
+  userStore.user?.avatar ? userApi.getAvatarUrl() : '',
+)
 
 function navigate(index: string) {
   router.push(index)
@@ -158,6 +169,13 @@ async function handleLogout() {
   align-items: center;
   justify-content: center;
   margin: 0 auto 10px;
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .user-name {

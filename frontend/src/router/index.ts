@@ -28,6 +28,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'project/:id', name: 'ProjectDetail', component: () => import('@/views/ProjectDetail.vue') },
       { path: 'settings', name: 'Settings', component: () => import('@/views/Settings.vue') },
       { path: 'upload', name: 'Upload', component: () => import('@/views/UploadPaper.vue') },
+      { path: 'eval', name: 'Eval', component: () => import('@/views/Eval.vue') },
       { path: 'paper/:id', name: 'PaperReading', component: () => import('@/views/PaperReading.vue') },
     ],
   },

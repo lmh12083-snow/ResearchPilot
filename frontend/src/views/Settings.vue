@@ -1,17 +1,59 @@
 <template>
   <div class="settings-page">
+    <!-- 头像 -->
     <el-card shadow="hover">
-      <template #header>
-        <span style="font-weight: 600; font-size: 16px;">用户设置</span>
-      </template>
-      <el-descriptions :column="1" border>
-        <el-descriptions-item label="用户名">
-          <div class="info-value">{{ userStore.user?.username }}</div>
-        </el-descriptions-item>
-        <el-descriptions-item label="邮箱">
-          <div class="info-value">{{ userStore.user?.email }}</div>
-        </el-descriptions-item>
-      </el-descriptions>
+      <template #header><span class="card-title">头像设置</span></template>
+      <div class="avatar-row">
+        <el-avatar :size="72" :src="avatarSrc" :icon="avatarSrc ? undefined : UserFilled" />
+        <div class="avatar-actions">
+          <el-upload
+            :show-file-list="false"
+            :before-upload="handleAvatarUpload"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+          >
+            <el-button type="primary" :loading="uploadingAvatar">上传新头像</el-button>
+          </el-upload>
+          <el-button v-if="userStore.user?.avatar" :loading="deletingAvatar" @click="handleAvatarDelete">
+            移除头像
+          </el-button>
+          <p class="avatar-hint">支持 png / jpg / webp / gif，不超过 2MB</p>
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 基本信息 -->
+    <el-card shadow="hover">
+      <template #header><span class="card-title">基本信息</span></template>
+      <el-form label-width="70px" :model="profileForm" @submit.prevent>
+        <el-form-item label="用户名">
+          <el-input v-model="profileForm.username" placeholder="用户名" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="profileForm.email" placeholder="邮箱" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <!-- 修改密码 -->
+    <el-card shadow="hover">
+      <template #header><span class="card-title">修改密码</span></template>
+      <el-form label-width="70px" :model="pwdForm" @submit.prevent>
+        <el-form-item label="当前密码">
+          <el-input v-model="pwdForm.old_password" type="password" show-password placeholder="当前密码" />
+        </el-form-item>
+        <el-form-item label="新密码">
+          <el-input v-model="pwdForm.new_password" type="password" show-password placeholder="至少 6 位" />
+        </el-form-item>
+        <el-form-item label="确认新密码">
+          <el-input v-model="pwdForm.confirm" type="password" show-password placeholder="再次输入新密码" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="savingPwd" @click="savePassword">保存</el-button>
+        </el-form-item>
+      </el-form>
     </el-card>
 
     <el-card shadow="hover" class="usage-card">
@@ -63,12 +105,116 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { Refresh, UserFilled } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
+import { userApi } from '@/api/user'
 import { llmApi, type LLMStats } from '@/api/llm'
 
 const userStore = useUserStore()
+
+// ── 头像 ────────────────────────────────────────────────────────
+const uploadingAvatar = ref(false)
+const deletingAvatar = ref(false)
+
+const avatarSrc = computed(() =>
+  userStore.user?.avatar ? userApi.getAvatarUrl() : '',
+)
+
+async function handleAvatarUpload(file: File): Promise<boolean> {
+  uploadingAvatar.value = true
+  try {
+    const res = await userApi.uploadAvatar(file)
+    userStore.setUser(res.data)
+    ElMessage.success('头像已更新')
+  } catch { /* handled by interceptor */ }
+  finally {
+    uploadingAvatar.value = false
+  }
+  return false
+}
+
+async function handleAvatarDelete() {
+  deletingAvatar.value = true
+  try {
+    const res = await userApi.deleteAvatar()
+    userStore.setUser(res.data)
+    ElMessage.success('已移除头像')
+  } catch { /* handled by interceptor */ }
+  finally {
+    deletingAvatar.value = false
+  }
+}
+
+// ── 基本信息 ───────────────────────────────────────────────────
+const profileForm = reactive({ username: '', email: '' })
+const savingProfile = ref(false)
+
+watch(
+  () => userStore.user,
+  (u) => {
+    if (u) {
+      profileForm.username = u.username
+      profileForm.email = u.email
+    }
+  },
+  { immediate: true },
+)
+
+async function saveProfile() {
+  const payload: { username?: string; email?: string } = {}
+  if (profileForm.username && profileForm.username !== userStore.user?.username) {
+    payload.username = profileForm.username
+  }
+  if (profileForm.email && profileForm.email !== userStore.user?.email) {
+    payload.email = profileForm.email
+  }
+  if (!Object.keys(payload).length) {
+    ElMessage.info('没有需要修改的内容')
+    return
+  }
+  savingProfile.value = true
+  try {
+    const res = await userApi.updateProfile(payload)
+    userStore.setUser(res.data)
+    ElMessage.success('保存成功')
+  } catch { /* handled by interceptor */ }
+  finally {
+    savingProfile.value = false
+  }
+}
+
+// ── 修改密码 ───────────────────────────────────────────────────
+const pwdForm = reactive({ old_password: '', new_password: '', confirm: '' })
+const savingPwd = ref(false)
+
+async function savePassword() {
+  if (pwdForm.new_password.length < 6) {
+    ElMessage.warning('新密码至少 6 位')
+    return
+  }
+  if (pwdForm.new_password !== pwdForm.confirm) {
+    ElMessage.warning('两次输入的新密码不一致')
+    return
+  }
+  savingPwd.value = true
+  try {
+    await userApi.changePassword({
+      old_password: pwdForm.old_password,
+      new_password: pwdForm.new_password,
+    })
+    ElMessage.success('密码已修改')
+    pwdForm.old_password = ''
+    pwdForm.new_password = ''
+    pwdForm.confirm = ''
+  } catch { /* handled by interceptor */ }
+  finally {
+    savingPwd.value = false
+  }
+}
+
+// ── LLM 用量统计 ──────────────────────────────────────────────
 const stats = ref<LLMStats | null>(null)
 const loading = ref(false)
 
@@ -77,6 +223,14 @@ const FEATURE_LABELS: Record<string, string> = {
   agent: 'Agent 工具调用',
   analysis: '论文分析',
   eval: 'RAG 评测',
+  notes: '阅读笔记提炼',
+  compare: '论文对比',
+  compare_planner: '对比·规划维度',
+  compare_specialist: '对比·论文分析',
+  compare_aggregate: '对比·聚合',
+  review_planner: '综述·结构规划',
+  review_section: '综述·章节撰写',
+  review_intro: '综述·摘要概述',
 }
 
 function pctOfTotal(tokens: number): number {
@@ -104,12 +258,29 @@ onMounted(loadStats)
   flex-direction: column;
   gap: 16px;
 }
-.info-value {
-  color: #1e293b;
-  font-weight: 500;
+.card-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.avatar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.avatar-hint {
+  width: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
 }
 .usage-card {
-  margin-top: 16px;
+  margin-top: 8px;
 }
 .usage-header {
   display: flex;

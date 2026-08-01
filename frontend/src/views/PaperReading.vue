@@ -51,7 +51,7 @@
               </div>
             </el-tab-pane>
             <el-tab-pane label="提取文本" name="text">
-              <div class="text-viewer" v-if="paperContent?.text">
+              <div class="text-viewer" v-if="paperContent?.text" @mouseup="captureSelection">
                 <pre class="parsed-text">{{ paperContent.text }}</pre>
               </div>
               <el-empty v-else description="暂无提取文本" :image-size="60" />
@@ -235,6 +235,86 @@
                 </div>
               </div>
             </el-tab-pane>
+
+            <!-- ═══ Notes Tab ═══ -->
+            <el-tab-pane label="笔记" name="notes">
+              <div class="notes-panel">
+                <div class="notes-header">
+                  <span class="notes-count">共 {{ notes.length }} 条笔记</span>
+                  <el-button size="small" :loading="exportingNotes" @click="exportNotes">
+                    导出 Markdown
+                  </el-button>
+                </div>
+
+                <!-- Compose -->
+                <div class="note-compose">
+                  <div class="note-compose-row">
+                    <el-button
+                      size="small"
+                      :disabled="!selectedText"
+                      @click="noteAnchor = selectedText || noteAnchor"
+                    >使用选中文本</el-button>
+                    <span v-if="selectedText" class="sel-hint">已选中 {{ selectedText.length }} 字</span>
+                  </div>
+                  <el-input
+                    v-model="noteAnchor"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="摘录片段（切换到「提取文本」选中文字后导入）"
+                  />
+                  <el-input
+                    v-model="noteContent"
+                    type="textarea"
+                    :rows="2"
+                    placeholder="你的笔记 / 想法"
+                  />
+                  <div class="note-compose-row">
+                    <el-input v-model="noteTags" placeholder="标签，用逗号分隔" size="small" style="flex: 1" />
+                    <el-checkbox v-model="noteSummarize">AI 提炼</el-checkbox>
+                    <el-button
+                      type="primary"
+                      size="small"
+                      :loading="savingNote"
+                      :disabled="!noteAnchor && !noteContent"
+                      @click="saveNote"
+                    >添加</el-button>
+                  </div>
+                </div>
+
+                <!-- List -->
+                <div v-if="notes.length" class="note-list">
+                  <div v-for="n in notes" :key="n.id" class="note-item">
+                    <div v-if="editingId === n.id" class="note-edit">
+                      <el-input v-model="editAnchor" type="textarea" :rows="2" placeholder="摘录" />
+                      <el-input v-model="editContent" type="textarea" :rows="2" placeholder="笔记内容" />
+                      <div class="note-item-actions">
+                        <el-button size="small" type="primary" :loading="savingNote" @click="saveEdit(n)">保存</el-button>
+                        <el-button size="small" @click="editingId = null">取消</el-button>
+                      </div>
+                    </div>
+                    <template v-else>
+                      <div class="note-item-header">
+                        <div class="note-tags">
+                          <el-tag v-for="t in n.tags" :key="t" size="small" type="info">{{ t }}</el-tag>
+                        </div>
+                        <div class="note-item-actions">
+                          <el-button size="small" text :loading="summarizingId === n.id" @click="doSummarize(n.id)">AI 提炼</el-button>
+                          <el-button size="small" text @click="startEdit(n)">编辑</el-button>
+                          <el-button size="small" text type="danger" @click="deleteNote(n.id)">删除</el-button>
+                        </div>
+                      </div>
+                      <div v-if="n.anchor_text" class="note-anchor">“{{ n.anchor_text }}”</div>
+                      <div v-if="n.content" class="note-content">{{ n.content }}</div>
+                      <div v-if="n.ai_summary" class="note-summary">
+                        <span class="summary-label">AI 提炼：</span>
+                        <span class="summary-text">{{ n.ai_summary }}</span>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                <el-empty v-else description="暂无笔记，记录你的阅读想法" :image-size="60" />
+              </div>
+            </el-tab-pane>
           </el-tabs>
         </div>
       </div>
@@ -245,7 +325,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   StarFilled,
   WarningFilled,
@@ -258,6 +338,7 @@ import {
 } from '@element-plus/icons-vue'
 import { paperApi } from '@/api/paper'
 import type { Paper, PaperContent, Analysis, ChatMessage, Citation } from '@/api/paper'
+import { noteApi, type Note } from '@/api/notes'
 
 // ── Route ──
 const route = useRoute()
@@ -273,7 +354,7 @@ const notFound = ref(false)
 const pdfLoading = ref(true)
 
 const viewMode = ref<'pdf' | 'text'>('pdf')
-const rightTab = ref<'analysis' | 'chat'>('analysis')
+const rightTab = ref<'analysis' | 'chat' | 'notes'>('analysis')
 
 // Analysis
 const analysisData = ref<Analysis | null>(null)
@@ -390,9 +471,10 @@ async function loadAll() {
     paperDetail.value = detailRes.data
     if (contentRes) paperContent.value = contentRes.data
 
-    // Load analysis and chat in parallel
+    // Load analysis, chat and notes in parallel
     loadAnalysis()
     loadChatHistory()
+    loadNotes()
   } catch (e: any) {
     if (e?.response?.status === 404) notFound.value = true
     else error.value = true
@@ -547,6 +629,125 @@ function scrollToBottom() {
 function goBack() {
   if (paperDetail.value?.project_id) router.push(`/project/${paperDetail.value.project_id}`)
   else router.back()
+}
+
+// ── Notes ──
+const notes = ref<Note[]>([])
+const selectedText = ref('')
+const noteAnchor = ref('')
+const noteContent = ref('')
+const noteTags = ref('')
+const noteSummarize = ref(false)
+const savingNote = ref(false)
+const editingId = ref<number | null>(null)
+const editAnchor = ref('')
+const editContent = ref('')
+const summarizingId = ref<number | null>(null)
+const exportingNotes = ref(false)
+
+function captureSelection() {
+  const sel = window.getSelection()
+  if (!sel || sel.isCollapsed) {
+    selectedText.value = ''
+    return
+  }
+  const text = sel.toString().trim()
+  if (text && text.length < 2000) selectedText.value = text
+}
+
+async function loadNotes() {
+  try {
+    const res = await noteApi.list({ paper_id: paperId.value })
+    notes.value = res.data
+  } catch { /* handled by interceptor */ }
+}
+
+async function saveNote() {
+  if (!noteAnchor.value.trim() && !noteContent.value.trim()) return
+  savingNote.value = true
+  try {
+    const res = await noteApi.create({
+      paper_id: paperId.value,
+      anchor_text: noteAnchor.value.trim() || undefined,
+      content: noteContent.value.trim() || undefined,
+      tags: noteTags.value.split(/[,，]/).map(t => t.trim()).filter(Boolean),
+      summarize: noteSummarize.value,
+    })
+    notes.value.unshift(res.data)
+    noteAnchor.value = ''
+    noteContent.value = ''
+    noteTags.value = ''
+    noteSummarize.value = false
+    selectedText.value = ''
+    ElMessage.success('笔记已添加')
+  } catch { /* handled by interceptor */ }
+  finally {
+    savingNote.value = false
+  }
+}
+
+function startEdit(n: Note) {
+  editingId.value = n.id
+  editAnchor.value = n.anchor_text || ''
+  editContent.value = n.content || ''
+}
+
+async function saveEdit(n: Note) {
+  savingNote.value = true
+  try {
+    const res = await noteApi.update(n.id, {
+      anchor_text: editAnchor.value.trim() || undefined,
+      content: editContent.value.trim() || undefined,
+    })
+    Object.assign(n, res.data)
+    editingId.value = null
+    ElMessage.success('已保存')
+  } catch { /* handled by interceptor */ }
+  finally {
+    savingNote.value = false
+  }
+}
+
+async function deleteNote(id: number) {
+  try {
+    await ElMessageBox.confirm('确定删除这条笔记吗？', '删除确认', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await noteApi.remove(id)
+    notes.value = notes.value.filter(n => n.id !== id)
+    ElMessage.success('已删除')
+  } catch { /* handled by interceptor */ }
+}
+
+async function doSummarize(id: number) {
+  summarizingId.value = id
+  try {
+    const res = await noteApi.summarize(id)
+    const idx = notes.value.findIndex(n => n.id === id)
+    if (idx >= 0) notes.value[idx] = res.data
+    ElMessage.success('AI 提炼完成')
+  } catch { /* handled by interceptor */ }
+  finally {
+    summarizingId.value = null
+  }
+}
+
+async function exportNotes() {
+  if (!paperDetail.value?.project_id) return
+  exportingNotes.value = true
+  try {
+    await noteApi.exportMarkdown(paperDetail.value.project_id, paperId.value)
+    ElMessage.success('已导出 Markdown')
+  } catch { /* handled by interceptor */ }
+  finally {
+    exportingNotes.value = false
+  }
 }
 
 onMounted(loadAll)
@@ -908,5 +1109,124 @@ onMounted(loadAll)
 @keyframes status-blink {
   0%, 100% { opacity: 0.6; }
   50% { opacity: 1; }
+}
+
+/* ── Notes Panel ── */
+.notes-panel {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.notes-count {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.note-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.note-compose-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sel-hint {
+  font-size: 12px;
+  color: #3b82f6;
+}
+
+.note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-item {
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.note-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.note-item-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.note-anchor {
+  font-size: 13px;
+  color: #1e40af;
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.note-content {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 6px;
+}
+
+.note-summary {
+  font-size: 12px;
+  color: #047857;
+  background: #ecfdf5;
+  border-radius: 6px;
+  padding: 8px 10px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.summary-label {
+  font-weight: 600;
+}
+
+.note-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 </style>

@@ -86,6 +86,9 @@
           <el-button :disabled="papers.length < 2" @click="openCompare">
             <el-icon><Switch /></el-icon> 对比论文
           </el-button>
+          <el-button :disabled="papers.length < 2" @click="openReview">
+            <el-icon><Document /></el-icon> 生成综述
+          </el-button>
           <el-upload :show-file-list="false" :before-upload="handleUpload" accept=".pdf">
             <el-button type="primary" :loading="uploading">上传论文</el-button>
           </el-upload>
@@ -133,48 +136,52 @@
     </div>
 
     <!-- Compare Dialog -->
-    <el-dialog v-model="compareVisible" title="论文对比" width="620px" :close-on-click-modal="false">
+    <el-dialog v-model="compareVisible" title="论文对比（2-5 篇）" width="680px" :close-on-click-modal="false">
       <div v-if="!compareResult" class="compare-form">
         <div class="compare-field">
-          <div class="compare-field-label">论文 A</div>
-          <el-select v-model="comparePaperA" placeholder="选择论文 A" style="width: 100%">
-            <el-option
-              v-for="p in papers"
-              :key="p.id"
-              :value="p.id"
-              :label="p.title"
-              :disabled="p.id === comparePaperB"
-            />
-          </el-select>
+          <div class="compare-field-label">对比方式</div>
+          <el-radio-group v-model="compareMode" size="small">
+            <el-radio-button value="single">⚡ 单次生成</el-radio-button>
+            <el-radio-button value="agent">🤖 多 Agent 分析</el-radio-button>
+          </el-radio-group>
+          <div class="compare-mode-hint">{{ compareMode === 'agent' ? '多 Agent 编排：规划维度 → 并行分析各论文 → 聚合对比' : '一次 LLM 调用生成对比，速度最快' }}</div>
         </div>
         <div class="compare-field">
-          <div class="compare-field-label">论文 B</div>
-          <el-select v-model="comparePaperB" placeholder="选择论文 B" style="width: 100%">
-            <el-option
-              v-for="p in papers"
-              :key="p.id"
-              :value="p.id"
-              :label="p.title"
-              :disabled="p.id === comparePaperA"
-            />
+          <div class="compare-field-label">选择论文（最多 {{ COMPARE_MAX }} 篇，按选择顺序对比）</div>
+          <el-select
+            v-model="comparePaperIds"
+            multiple
+            :multiple-limit="COMPARE_MAX"
+            placeholder="选择 2-5 篇论文"
+            style="width: 100%"
+          >
+            <el-option v-for="p in papers" :key="p.id" :value="p.id" :label="p.title" />
           </el-select>
         </div>
-        <el-button
-          type="primary"
-          class="compare-submit"
-          :loading="comparing"
-          :disabled="!comparePaperA || !comparePaperB || comparePaperA === comparePaperB"
-          @click="doCompare"
-        >
-          {{ comparing ? 'AI 正在对比…' : '开始对比' }}
-        </el-button>
+
+        <div v-if="comparing && streamStatus" class="compare-stream-status">{{ streamStatus }}</div>
+
+        <div class="compare-submit-row">
+          <el-button
+            type="primary"
+            :loading="comparing"
+            :disabled="comparePaperIds.length < 2"
+            @click="doCompare"
+          >
+            {{ comparing ? (compareMode === 'agent' ? 'AI 分析中…' : 'AI 正在对比…') : `开始对比（${comparePaperIds.length} 篇）` }}
+          </el-button>
+          <el-button v-if="comparing && compareMode === 'agent'" text @click="stopCompare">
+            停止
+          </el-button>
+        </div>
       </div>
 
       <div v-else class="compare-result">
-        <div class="compare-paper-tags">
-          <el-tag>{{ paperTitle(comparePaperA) }}</el-tag>
-          <el-icon><Switch /></el-icon>
-          <el-tag type="success">{{ paperTitle(comparePaperB) }}</el-tag>
+        <div v-if="compareResult.papers?.length" class="compare-overview-list">
+          <div v-for="p in compareResult.papers" :key="p.paper_id" class="compare-overview-item">
+            <el-tag size="small" type="primary" class="compare-overview-tag">{{ p.title }}</el-tag>
+            <span class="compare-overview-text">{{ p.summary || '—' }}</span>
+          </div>
         </div>
 
         <div v-for="section in COMPARE_SECTIONS" :key="section.key" class="compare-section">
@@ -185,6 +192,47 @@
         <div class="compare-actions">
           <el-button size="small" @click="resetCompare">重新选择</el-button>
         </div>
+      </div>
+    </el-dialog>
+
+    <!-- Literature Review Dialog -->
+    <el-dialog v-model="reviewVisible" title="文献综述生成" width="820px" :close-on-click-modal="false">
+      <div v-if="!reviewMarkdown" class="compare-form">
+        <div class="compare-field">
+          <div class="compare-field-label">选择论文（至少 2 篇，最多 {{ COMPARE_MAX }} 篇）</div>
+          <el-select
+            v-model="reviewPaperIds"
+            multiple
+            :multiple-limit="COMPARE_MAX"
+            placeholder="选择要综述的论文"
+            style="width: 100%"
+          >
+            <el-option v-for="p in papers" :key="p.id" :value="p.id" :label="p.title" />
+          </el-select>
+        </div>
+
+        <div v-if="reviewing && reviewStatus" class="compare-stream-status">{{ reviewStatus }}</div>
+
+        <div class="compare-submit-row">
+          <el-button
+            type="primary"
+            :loading="reviewing"
+            :disabled="reviewPaperIds.length < 2"
+            @click="doReview"
+          >
+            {{ reviewing ? 'AI 生成中…' : `生成综述（${reviewPaperIds.length} 篇）` }}
+          </el-button>
+          <el-button v-if="reviewing" text @click="stopReview">停止</el-button>
+        </div>
+      </div>
+
+      <div v-else class="review-result">
+        <div class="review-actions">
+          <el-button size="small" @click="copyReview">复制</el-button>
+          <el-button size="small" type="primary" @click="downloadReview">下载 .md</el-button>
+          <el-button size="small" @click="resetReview">重新选择</el-button>
+        </div>
+        <pre class="review-markdown">{{ reviewMarkdown }}</pre>
       </div>
     </el-dialog>
   </div>
@@ -201,8 +249,9 @@ import type { Project } from '@/api/project'
 import type { Paper, CompareResult } from '@/api/paper'
 import { usePaperSearch } from '@/composables/usePaperSearch'
 
+const COMPARE_MAX = 5
+
 const COMPARE_SECTIONS: { key: keyof CompareResult; label: string }[] = [
-  { key: 'overview', label: '总体概述' },
   { key: 'similarities', label: '共同点' },
   { key: 'method_differences', label: '方法差异' },
   { key: 'experiment_differences', label: '实验差异' },
@@ -291,34 +340,126 @@ async function handleDeletePaper(paperId: number) {
 
 const compareVisible = ref(false)
 const comparing = ref(false)
-const comparePaperA = ref<number | undefined>(undefined)
-const comparePaperB = ref<number | undefined>(undefined)
+const compareMode = ref<'single' | 'agent'>('single')
+const comparePaperIds = ref<number[]>([])
 const compareResult = ref<CompareResult | null>(null)
+const streamStatus = ref('')
+const compareController = ref<AbortController | null>(null)
 
 function openCompare() {
   compareVisible.value = true
   compareResult.value = null
+  streamStatus.value = ''
 }
 
 function resetCompare() {
   compareResult.value = null
+  streamStatus.value = ''
 }
 
-function paperTitle(id: number | undefined): string {
-  const p = papers.value.find((x) => x.id === id)
-  return p ? p.title : ''
+function stopCompare() {
+  compareController.value?.abort()
 }
 
 async function doCompare() {
-  if (!comparePaperA.value || !comparePaperB.value) return
+  if (comparePaperIds.value.length < 2) return
   comparing.value = true
+  streamStatus.value = ''
+  compareResult.value = null
   try {
-    const res = await paperApi.comparePapers([comparePaperA.value, comparePaperB.value])
-    compareResult.value = res.data
-  } catch { /* handled by interceptor */ }
-  finally {
+    if (compareMode.value === 'agent') {
+      const controller = new AbortController()
+      compareController.value = controller
+      await paperApi.comparePapersStream(
+        comparePaperIds.value,
+        {
+          onStatus: (t) => { streamStatus.value = t },
+          onResult: (result) => { compareResult.value = result },
+          onError: (detail) => ElMessage.error(detail),
+        },
+        controller.signal,
+      )
+    } else {
+      const res = await paperApi.comparePapers(comparePaperIds.value)
+      compareResult.value = res.data
+    }
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      ElMessage.info('已停止对比')
+    } else {
+      ElMessage.error(e?.message || '对比失败')
+    }
+  } finally {
     comparing.value = false
+    compareController.value = null
   }
+}
+
+const reviewVisible = ref(false)
+const reviewing = ref(false)
+const reviewPaperIds = ref<number[]>([])
+const reviewMarkdown = ref('')
+const reviewStatus = ref('')
+const reviewController = ref<AbortController | null>(null)
+
+function openReview() {
+  reviewVisible.value = true
+  reviewMarkdown.value = ''
+  reviewStatus.value = ''
+}
+
+function resetReview() {
+  reviewMarkdown.value = ''
+  reviewStatus.value = ''
+}
+
+function stopReview() {
+  reviewController.value?.abort()
+}
+
+async function doReview() {
+  if (reviewPaperIds.value.length < 2) return
+  reviewing.value = true
+  reviewStatus.value = ''
+  reviewMarkdown.value = ''
+  try {
+    const controller = new AbortController()
+    reviewController.value = controller
+    await paperApi.reviewStream(
+      Number(route.params.id),
+      reviewPaperIds.value,
+      {
+        onStatus: (t) => { reviewStatus.value = t },
+        onResult: (md) => { reviewMarkdown.value = md },
+        onError: (detail) => ElMessage.error(detail),
+      },
+      controller.signal,
+    )
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      ElMessage.info('已停止生成')
+    } else {
+      ElMessage.error(e?.message || '生成失败')
+    }
+  } finally {
+    reviewing.value = false
+    reviewController.value = null
+  }
+}
+
+function copyReview() {
+  navigator.clipboard.writeText(reviewMarkdown.value)
+  ElMessage.success('已复制到剪贴板')
+}
+
+function downloadReview() {
+  const blob = new Blob([reviewMarkdown.value], { type: 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'literature_review.md'
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 function parseAuthors(authors: string | null): string {
@@ -457,8 +598,23 @@ onMounted(() => {
   color: #64748b;
   margin-bottom: 6px;
 }
-.compare-submit {
-  align-self: flex-start;
+.compare-mode-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 6px;
+}
+.compare-stream-status {
+  font-size: 13px;
+  color: #3b82f6;
+  background: #eff6ff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  line-height: 1.5;
+}
+.compare-submit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .compare-result {
@@ -469,11 +625,27 @@ onMounted(() => {
   overflow-y: auto;
   padding-right: 4px;
 }
-.compare-paper-tags {
+.compare-overview-list {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 8px;
+}
+.compare-overview-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.compare-overview-tag {
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.compare-overview-text {
+  font-size: 13px;
+  color: #334155;
+  line-height: 1.6;
 }
 .compare-section-title {
   font-size: 13px;
@@ -490,5 +662,30 @@ onMounted(() => {
 .compare-actions {
   display: flex;
   justify-content: flex-end;
+}
+
+.review-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.review-markdown {
+  margin: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

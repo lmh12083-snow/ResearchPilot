@@ -37,6 +37,7 @@ from app.schemas.paper import (
     Citation,
     CompareRequest,
     CompareResponse,
+    ReviewRequest,
 )
 
 router = APIRouter(prefix="", tags=["papers"])
@@ -608,15 +609,22 @@ def regenerate_paper_analysis(
 # ── Compare ──────────────────────────────────────────────────────
 
 
-@router.post("/papers/compare", response_model=CompareResponse)
-def compare_papers(
-    data: CompareRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Structured comparison of two papers (LLM-generated)."""
-    if len(data.paper_ids) != 2:
-        raise HTTPException(status_code=400, detail="请选择两篇论文进行对比")
+def _validate_compare_papers(
+    data: CompareRequest, db: Session, current_user: User
+) -> list:
+    """Shared validation for comparison endpoints.
+
+    Enforces 2..COMPARE_MAX_PAPERS papers + ownership, and returns the papers
+    in the user's chosen order.
+    """
+    n = len(data.paper_ids)
+    if n < 2:
+        raise HTTPException(status_code=400, detail="请至少选择两篇论文进行对比")
+    if n > settings.COMPARE_MAX_PAPERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"一次最多对比 {settings.COMPARE_MAX_PAPERS} 篇论文",
+        )
 
     owned_paper_ids = {
         p.id
@@ -629,18 +637,114 @@ def compare_papers(
         if pid not in owned_paper_ids:
             raise HTTPException(status_code=404, detail=f"论文 {pid} 不存在或无权访问")
 
-    paper_a = db.query(Paper).filter(Paper.id == data.paper_ids[0]).first()
-    paper_b = db.query(Paper).filter(Paper.id == data.paper_ids[1]).first()
+    return [
+        db.query(Paper).filter(Paper.id == pid).first() for pid in data.paper_ids
+    ]
+
+
+@router.post("/papers/compare", response_model=CompareResponse)
+def compare_papers(
+    data: CompareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Structured comparison of 2..COMPARE_MAX_PAPERS papers (single LLM call)."""
+    papers = _validate_compare_papers(data, db, current_user)
 
     from app.services.paper_compare import compare_papers as run_compare
 
-    result = run_compare(paper_a, paper_b, db)
+    result = run_compare(papers, db)
     if result is None:
         raise HTTPException(
             status_code=503,
             detail="对比生成失败。LLM 可能未配置，请稍后重试。",
         )
     return CompareResponse(**result)
+
+
+@router.post("/papers/compare/stream")
+def compare_papers_stream(
+    data: CompareRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Multi-agent comparison with SSE progress (status* → done / error)."""
+    papers = _validate_compare_papers(data, db, current_user)
+
+    def generate():
+        from app.services.paper_compare_agent import compare_papers_agent_stream
+
+        try:
+            for event, payload in compare_papers_agent_stream(papers, db):
+                if event == "status":
+                    yield _sse("status", {"text": payload})
+                elif event == "result":
+                    yield _sse("done", {"result": payload})
+                elif event == "error":
+                    yield _sse("error", {"detail": payload})
+        except Exception as e:
+            yield _sse("error", {"detail": f"对比失败: {str(e)}"})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/projects/{project_id}/review/stream")
+def lit_review_stream(
+    project_id: int,
+    data: ReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a literature review for selected project papers (SSE).
+
+    Events: status* → done {markdown} / error {detail}.
+    """
+    project = (
+        db.query(Project)
+        .filter(Project.id == project_id, Project.user_id == current_user.id)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if len(data.paper_ids) < 2:
+        raise HTTPException(status_code=400, detail="请至少选择两篇论文生成综述")
+
+    owned_paper_ids = {
+        p.id
+        for p in db.query(Paper.id)
+        .join(Project, Project.id == Paper.project_id)
+        .filter(Project.user_id == current_user.id)
+        .all()
+    }
+    papers = []
+    for pid in data.paper_ids:
+        if pid not in owned_paper_ids:
+            raise HTTPException(status_code=404, detail=f"论文 {pid} 不存在或无权访问")
+        papers.append(db.query(Paper).filter(Paper.id == pid).first())
+
+    def generate():
+        from app.services.lit_review import generate_lit_review_stream as run_review
+
+        try:
+            for event, payload in run_review(papers, db):
+                if event == "status":
+                    yield _sse("status", {"text": payload})
+                elif event == "result":
+                    yield _sse("done", {"markdown": payload})
+                elif event == "error":
+                    yield _sse("error", {"detail": payload})
+        except Exception as e:
+            yield _sse("error", {"detail": f"综述生成失败: {str(e)}"})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Chat ──────────────────────────────────────────────────────────
@@ -678,14 +782,16 @@ def _prepare_chat(paper: Paper, db: Session, mode: str, message: str) -> dict:
             context_text = "\n\n".join(context_parts)
 
             system_prompt = (
-                f"你是一个学术论文助手。用户正在阅读论文：{paper.title}\n"
+                f"你是一个联网检索助手。用户正在阅读论文《{paper.title}》，但本次提问"
+                f"明确选择了联网搜索模式。\n"
                 f"用户的问题是：{message}\n\n"
                 f"以下是从网络搜索中获取的相关信息：\n\n{context_text}\n\n"
                 f"要求：\n"
-                f"1. 基于以上搜索结果回答用户问题\n"
-                f"2. 每引用一个信息源必须在末尾标注编号，如 [1]、[2]\n"
-                f"3. 请在回答末尾注明信息来源为网络搜索\n"
-                f"4. 如果搜索结果不足以回答问题，请如实说明"
+                f"1. 仅依据以上网络搜索结果回答用户问题，给出实时、最新的信息\n"
+                f"2. 严禁基于论文原文内容或历史对话作答，不要回答'论文中提到了…'\n"
+                f"3. 每引用一个信息源必须在末尾标注编号，如 [1]、[2]\n"
+                f"4. 请在回答末尾注明信息来源为网络搜索\n"
+                f"5. 如果搜索结果不足以回答问题，请如实说明，并给出进一步搜索的建议"
             )
             has_answer = True
             suggestions = []
@@ -777,16 +883,32 @@ def _prepare_chat(paper: Paper, db: Session, mode: str, message: str) -> dict:
     }
 
 
-def _build_messages(paper_id: int, db: Session, system_prompt: str) -> list[dict]:
-    """Build full message list: system prompt + last 6 messages of history."""
+def _build_messages(
+    paper_id: int,
+    db: Session,
+    system_prompt: str,
+    user_message: str,
+    include_history: bool = True,
+) -> list[dict]:
+    """Build full message list: system prompt + history + current user message.
+
+    With history, the just-saved user message is the last history item. Without
+    history (web_search mode), the current user message is appended explicitly —
+    the paper chat history is full of paper-based answers, which strongly biases
+    the LLM to answer from the paper instead of the freshly retrieved web results.
+    """
     messages = [{"role": "system", "content": system_prompt}]
+    if not include_history:
+        messages.append({"role": "user", "content": user_message})
+        return messages
     history = (
         db.query(ChatMessage)
         .filter(ChatMessage.paper_id == paper_id)
-        .order_by(ChatMessage.created_at.asc())
+        .order_by(ChatMessage.created_at.desc(), ChatMessage.id.desc())
         .limit(6)
         .all()
     )
+    history.reverse()  # restore chronological order
     for msg in history:
         messages.append({"role": msg.role, "content": msg.content})
     return messages
@@ -830,7 +952,13 @@ def chat_with_paper(
         )
 
     prep = _prepare_chat(paper, db, data.mode, data.message)
-    messages = _build_messages(paper_id, db, prep["system_prompt"])
+    messages = _build_messages(
+        paper_id,
+        db,
+        prep["system_prompt"],
+        data.message,
+        include_history=data.mode != "web_search",
+    )
 
     try:
         reply = LLMService.chat(messages, temperature=0.3, max_tokens=2048, feature="chat")
@@ -1011,7 +1139,13 @@ def chat_with_paper_stream(
 
     # Retrieval + prompt construction happens before the stream starts
     prep = _prepare_chat(paper, db, data.mode, data.message)
-    messages = _build_messages(paper_id, db, prep["system_prompt"])
+    messages = _build_messages(
+        paper_id,
+        db,
+        prep["system_prompt"],
+        data.message,
+        include_history=data.mode != "web_search",
+    )
 
     def generate():
         from app.core.database import SessionLocal
