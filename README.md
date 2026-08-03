@@ -39,7 +39,9 @@ Streams a full survey document: **Planner** proposes the section outline → int
 Annotate papers — capture selected text as an anchor, add notes and tags, or let the **LLM summarize** key points. Export everything as structured **Markdown** grouped by project and paper.
 
 ### 8. RAG evaluation
-Self-contained evaluation harness: **LLM-generates a test set** from your own papers, then measures **hit@1/3/5, MRR, answer accuracy, and faithfulness** (LLM-as-judge) in background jobs with live progress. No external benchmark data needed.
+Self-contained evaluation harness: **LLM-generates a validated test set** from your own papers, then measures **hit@1/3/5, MRR, answer accuracy, and faithfulness** (LLM-as-judge) in background jobs with live progress. No external benchmark data needed. Questions are filtered for validity (answerable from their source chunk) and reference/bibliography sections are excluded, so metrics reflect real content retrieval.
+
+Measured on 32 validated questions across 2 papers: the production hybrid pipeline lifts **hit@1 from 31% → 66%, hit@5 from 59% → 91%, MRR 0.41 → 0.77** vs. pure dense retrieval, with **84% answer accuracy and 88% faithfulness**.
 
 ### 9. Dashboard, account & usage
 Project/paper dashboards, avatar upload, profile & password management, and per-feature **LLM token usage tracking**.

@@ -111,8 +111,40 @@ def _extract_json(text: str):
 
 # ── Chunk sampling ──────────────────────────────────────────────
 
+# Citation signatures used to locate the references/bibliography section.
+# Reference entries cram several of these together; body prose rarely does.
+_CITATION_MARKERS = [
+    r"\barXiv\b", r"\bURL\b", r"\bdoi\.org\b", r"\bACL\b", r"\bEMNLP\b", r"\bNeurIPS\b",
+    r"\bICLR\b", r"\bNAACL\b", r"\bAAAI\b", r"\bCVPR\b", r"Proceedings of the",
+    r"Annual Meeting of the", r"Association for Computational", r"\. In ",
+    r"pages \d+", r"\(\d{4}\)", r"pp\.\s?\d+",
+]
+
+
+def _reference_density(text: str) -> int:
+    """Count citation markers in a chunk — high in reference lists."""
+    return sum(len(re.findall(p, text, re.IGNORECASE)) for p in _CITATION_MARKERS)
+
+
+def _drop_reference_section(chunks: list[dict]) -> list[dict]:
+    """Remove the references/bibliography section from a chunk list.
+
+    A reference list split across chunks only has its first chunk under a
+    "References" heading, so a per-chunk heading check misses the rest. Instead
+    we find the first chunk with a dense citation signature (sustained by the
+    next chunk) and drop everything from there to the end.
+    """
+    ordered = sorted(chunks, key=lambda c: (c.get("metadata") or {}).get("chunk_index", 0))
+    for i, c in enumerate(ordered):
+        if _reference_density(c.get("text") or "") < 5:
+            continue
+        if i + 1 < len(ordered) and _reference_density(ordered[i + 1].get("text") or "") >= 3:
+            return ordered[:i]  # references run from chunk i to the end
+    return ordered
+
+
 def _filter_chunks(chunks: list[dict]) -> list[dict]:
-    """Drop too-short chunks and boilerplate pages (references, acknowledgments)."""
+    """Drop too-short chunks, boilerplate pages, and the reference section."""
     out = []
     for c in chunks:
         text = (c.get("text") or "").strip()
@@ -124,7 +156,7 @@ def _filter_chunks(chunks: list[dict]) -> list[dict]:
         ):
             continue
         out.append(c)
-    return out
+    return _drop_reference_section(out)
 
 
 def _sample_chunks(chunks: list[dict], sample_size: int) -> list[dict]:
@@ -138,6 +170,43 @@ def _sample_chunks(chunks: list[dict], sample_size: int) -> list[dict]:
 
 
 # ── Stage 1: question generation ────────────────────────────────
+
+VALIDATE_PROMPT = """你是 RAG 测试集质检员。判断下面的问题是否【仅凭】给定的论文段落即可回答。
+- 若段落确实包含回答问题所需的关键信息 → 只输出 YES
+- 若段落没有足够信息、或问题指向段落之外的内容 → 只输出 NO
+只输出 YES 或 NO，不要输出其他文字。
+
+段落：
+{chunk}
+
+问题：
+{question}"""
+
+
+def _validate_question(question: str, chunk_text: str) -> bool:
+    """Keep only questions answerable from their own source chunk.
+
+    The generator sometimes produces a question that actually refers to a
+    different part of the paper; such questions make retrieval scores unfairly
+    low, so they are dropped from the test set.
+    """
+    from app.services.llm import LLMService
+
+    try:
+        reply = LLMService.chat(
+            messages=[
+                {"role": "system", "content": VALIDATE_PROMPT.format(
+                    chunk=(chunk_text or "")[:1500], question=question,
+                )},
+            ],
+            temperature=0.0,
+            max_tokens=10,
+            feature="eval",
+        )
+        return (reply or "").strip().upper().startswith("YES")
+    except Exception:
+        return True  # fail-open: keep the question on transient errors
+
 
 def _generate_questions_for_paper(paper, chunks: list[dict]) -> list[dict]:
     """Batch-generate one question per chunk. Returns [{"question", "chunk"}...]."""
@@ -158,6 +227,8 @@ def _generate_questions_for_paper(paper, chunks: list[dict]) -> list[dict]:
     questions = []
     for i, q in enumerate(data):
         if i >= len(chunks) or not isinstance(q, str) or not q.strip():
+            continue
+        if not _validate_question(q.strip(), chunks[i].get("text") or ""):
             continue
         questions.append({"question": q.strip(), "chunk": chunks[i]})
     return questions
