@@ -1,0 +1,62 @@
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: researchpilot
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-prootpassword"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      # Override the Windows-oriented defaults in the repo .env so they point
+      # at the MySQL service + container paths. Tables are created at startup.
+      DATABASE_URL: mysql+pymysql://user:password@mysql:3306/researchpilot
+      UPLOAD_PATH: /app/uploads
+      CHROMA_PERSIST_DIR: /app/chroma_db
+      # Secrets come from the repo .env (compose interpolation) — add
+      # DEEPSEEK_API_KEY there before bringing the stack up.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-researchpilot-dev-secret-key-2024}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      LLM_API_BASE: ${LLM_API_BASE:-https://api.deepseek.com}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-chat}
+      # HuggingFace models are read ONLY from the cache (no network):
+      # huggingface.co is blocked in CN and hf-mirror.com 308-redirects model
+      # files back to it, so loading must be offline from the mounted cache.
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - uploads_data:/app/uploads
+      - chroma_data:/app/chroma_db
+      # Host HuggingFace cache → /root/.cache/huggingface. Contains both models
+      # (paraphrase-multilingual-MiniLM-L12-v2, mmarco-mMiniLMv2-L12-H384-v1).
+      # Set HF_CACHE_DIR in your .env to point at your local cache directory
+      # (defaults to the OS home directory's ~/.cache/huggingface).
+      - ${HF_CACHE_DIR:-~/.cache/huggingface}:/root/.cache/huggingface
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # Not exposed to the host — the frontend nginx proxies /api/ on :8080.
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  chroma_data:
+  uploads_data:

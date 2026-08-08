@@ -70,6 +70,55 @@ class Reranker:
         return ordered[:top_k]
 
 
+# Reference-list signatures. A chunk dense in these is a bibliography entry,
+# not body prose — pure noise for RAG retrieval (chat / agent / search / eval).
+# Mirrors the marker set used by rag_eval's reference-section filter.
+_REFERENCE_MARKERS = [
+    r"\barXiv\b", r"\bURL\b", r"\bdoi\.org\b", r"\bACL\b", r"\bEMNLP\b", r"\bNeurIPS\b",
+    r"\bICLR\b", r"\bNAACL\b", r"\bAAAI\b", r"\bCVPR\b", r"Proceedings of the",
+    r"Annual Meeting of the", r"Association for Computational", r"\. In ",
+    r"pages \d+", r"\(\d{4}\)", r"pp\.\s?\d+",
+]
+_REFERENCE_HEADING_PREFIXES = (
+    "references", "bibliography", "参考文献", "致谢", "acknowledg", "contents", "目录",
+)
+
+# Reference entries that a chunk boundary splits mid-way lose the dense
+# citation markers above, but keep their author-list shape: "Xxx Yyy, Zzz Aaa,
+# and Bbb Ccc". Body prose almost never lists 3+ named authors like this.
+_AUTHOR_LIST_RE = re.compile(r"[A-Z][a-z]+ [A-Z][a-z]+(?:, [A-Z][a-z]+ [A-Z][a-z]+){1,}")
+# "…editors, Proceedings of the…" / "…editor, Advances in…" — a split reference
+# entry that keeps its proceedings line. Note: we deliberately do NOT match a
+# bare ", and X" — that fires on body prose like "…generate r…" ("RAG-Token").
+_REFERENCE_PUBLISH_RE = re.compile(
+    r"(editors|editor),\s+(Advances in|Proceedings of|Journal of)"
+)
+
+
+def _is_reference_chunk(text: str) -> bool:
+    """True if a chunk is (likely) bibliography/acknowledgement boilerplate.
+
+    A chunk either starts under a reference heading, is dense in citation
+    signatures (year-in-parens, pp. ranges, "Proceedings of", ...), or lists
+    several named authors — the shape of a split reference entry. Body prose
+    rarely trips any of these, so this is a safe per-chunk filter.
+    """
+    t = (text or "").strip()
+    if not t:
+        return True
+    if t[:60].lower().startswith(_REFERENCE_HEADING_PREFIXES):
+        return True
+    if _AUTHOR_LIST_RE.search(t) or _REFERENCE_PUBLISH_RE.search(t):
+        return True
+    density = sum(len(re.findall(p, t, re.IGNORECASE)) for p in _REFERENCE_MARKERS)
+    return density >= 5
+
+
+def _drop_reference_chunks(items: list[dict]) -> list[dict]:
+    """Remove bibliography/acknowledgement chunks from a candidate list."""
+    return [c for c in items if not _is_reference_chunk(c.get("text") or "")]
+
+
 def _rrf_fuse(vec_results: list[dict], bm25_results: list[dict], top_k: int) -> list[dict]:
     """Reciprocal Rank Fusion of two ranked lists of {id, text, metadata}."""
     K = 60
@@ -155,6 +204,10 @@ def hybrid_search(
 
     # 3. Fuse with RRF
     fused = _rrf_fuse(vec_results, bm25_results, top_k=30)
+
+    # 3b. Drop bibliography/acknowledgement chunks before reranking — they are
+    # retrieval noise (a "summarize this paper" query must never return them).
+    fused = _drop_reference_chunks(fused)
 
     # 4. Cross-encoder rerank (optional)
     if rerank:

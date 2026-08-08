@@ -442,11 +442,24 @@ function renderList(text: string | null): string {
 }
 
 function formatContent(text: string, role: string): string {
-  // Only format assistant responses (LLM output may contain **bold**)
+  // Only normalize assistant responses (LLM outputs Markdown, but we render it
+  // as clean plain text — strip structural markers, keep content).
   if (role !== 'assistant') return escapeHtml(text)
   let html = escapeHtml(text)
-  // Convert **bold** to <strong>
+  // Convert **bold** to <strong> (emphasis, still reads as plain text)
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  // Strip Markdown headings: "## 一、基本信息" -> "一、基本信息"
+  html = html.replace(/^\s*#{1,6}\s+/gm, '')
+  // Bullet lists "- / * / +" -> "• "
+  html = html.replace(/^\s*[-*+]\s+/gm, '• ')
+  // Blockquote ">" prefix
+  html = html.replace(/^\s*>\s?/gm, '')
+  // Inline code `code` -> code
+  html = html.replace(/`([^`]+)`/g, '$1')
+  // Links [text](url) -> text
+  html = html.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+  // Horizontal rules "---"/"***" -> blank line
+  html = html.replace(/^\s*(?:-{3,}|\*{3,})\s*$/gm, '')
   return html
 }
 

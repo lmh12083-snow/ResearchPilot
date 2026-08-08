@@ -6,6 +6,8 @@ RAG chat with hybrid retrieval & reranking · multi-agent paper analysis & compa
 
 Built with **FastAPI · Vue 3 · ChromaDB · DeepSeek**.
 
+> ⚠️ **自行配置 API Key / API key required** — 本仓库不内置任何 API Key。若需要使用本项目，请先在 `.env` 中自行填入 `DEEPSEEK_API_KEY`（DeepSeek 官方 key，OpenAI 兼容接口）。未配置时对话 / 分析 / 综述 / 评测等 LLM 功能不可用。No API keys are bundled with this repository — provide your own `DEEPSEEK_API_KEY` to enable the LLM-powered features.
+
 ---
 
 ## ✨ Features
@@ -122,6 +124,26 @@ npm run dev        # http://localhost:5173
 ```
 
 Register an account in the UI, create a project, upload a PDF, and wait for the paper to reach `已完成` (COMPLETED) — then try analysis, chat, comparison, review, and notes.
+
+---
+
+## 🐳 Docker 部署（一键起全套）
+
+`docker compose` 一键拉起 **MySQL + 后端 + 前端（nginx 反向代理）**，`http://localhost:8080` 即完整应用。REST 与 SSE 流式经 nginx `/api/` 同源代理，无需配置 CORS。
+
+```bash
+# 1. 在仓库根目录 .env 中填入 DEEPSEEK_API_KEY（可先 cp .env.example .env）
+# 2. 构建并启动（首次构建会拉取基础镜像并安装依赖，约需数分钟）
+docker compose up --build
+```
+
+> **Embedding / reranker 模型不下载进镜像**，而是把宿主机 HuggingFace 缓存挂载进容器（`/root/.cache/huggingface`），并设 `HF_HUB_OFFLINE=1` 纯离线加载。原因是国内网络下 huggingface.co 被墙、`hf-mirror.com` 会 308 重定向回源站，构建时下载不可靠。首次对话/上传即从缓存加载，无需等待。缓存路径默认取本机家目录 `~/.cache/huggingface`，如需指定请在 `.env` 里设置 `HF_CACHE_DIR`（如 Windows 上 `HF_CACHE_DIR=C:/Users/<you>/.cache/huggingface`）。
+
+**演示路径（无需本地 PDF）：** 注册账号 → 新建项目 → 用 arXiv 导入功能粘贴一个 arXiv ID（如 `2007.01282`），系统自动下载并走解析 → 分块 → 向量化管线 → 论文状态变为「已完成」后即可体验分析 / 对话 / 对比 / 综述 / 评测。
+
+**数据持久化：** MySQL 数据、ChromaDB 向量库、上传文件分别存于命名卷 `mysql_data` / `chroma_data` / `uploads_data`，`docker compose down` 不会丢失，`docker compose down -v` 才会清空重建。
+
+**环境变量：** 见下表。容器内 `DATABASE_URL` 指向 MySQL 服务（`mysql`）、`UPLOAD_PATH=/app/uploads`、`CHROMA_PERSIST_DIR=/app/chroma_db`，由 compose 统一覆盖，无需手动改代码。
 
 ---
 

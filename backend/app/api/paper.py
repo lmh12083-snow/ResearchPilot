@@ -844,10 +844,16 @@ def _prepare_chat(paper: Paper, db: Session, mode: str, message: str) -> dict:
 
             context_text = "\n\n".join(context_parts)
 
+            # Give the LLM the paper abstract as global context — retrieval only
+            # returns a few chunks, which is not enough for whole-paper tasks
+            # like "summarize this paper".
+            abstract_line = f"论文摘要: {paper.abstract}\n\n" if paper.abstract else ""
+
             system_prompt = (
                 f"你是一个学术论文助手。请根据提供的论文原文片段回答用户问题。\n\n"
                 f"论文标题: {paper.title}\n"
                 f"{'作者: ' + paper.authors if paper.authors else ''}\n\n"
+                f"{abstract_line}"
                 f"以下是论文中与问题相关的原文片段：\n\n{context_text}\n\n"
                 f"要求：\n"
                 f"1. 基于以上原文片段回答问题，不要编造内容\n"
@@ -866,12 +872,13 @@ def _prepare_chat(paper: Paper, db: Session, mode: str, message: str) -> dict:
                 "查找相关最新论文",
             ]
 
+            abstract_note = f"论文摘要: {paper.abstract}\n\n" if paper.abstract else ""
             system_prompt = (
                 f"你是一个学术论文助手。用户正在阅读论文：{paper.title}\n"
                 f"用户的问题是：{message}\n\n"
                 f"注意：在论文中未找到与问题直接相关的内容。请如实告知用户，"
-                f"并根据论文标题、摘要等基本信息给出有限程度的背景说明，"
-                f"不要编造论文中不存在的信息。"
+                f"并基于论文标题和摘要给出有限程度的背景说明，不要编造论文中不存在的信息。\n\n"
+                f"{abstract_note}"
             )
             has_answer = False
 
@@ -978,12 +985,20 @@ def chat_with_paper(
     )
 
 
-def _agent_stream(paper: Paper, db: Session, message: str):
+def _agent_stream(paper_id: int, message: str):
     """Streaming ReAct agent loop (SSE: status* → meta → delta* → done).
 
     The LLM decides which tools to call (search_paper / search_project /
     search_web / get_paper_meta / list_project_papers), the loop executes them
     and feeds results back, then the final answer streams as delta events.
+
+    NOTE: this generator is consumed only after the request handler returns, at
+    which point the request-scoped DB session is already closed. We deliberately
+    receive the bare `paper_id` (int) instead of the ORM object: the object
+    passed in was expired by the earlier commit (all attributes, including the
+    PK, are cleared), so reading it would raise DetachedInstanceError. A fresh
+    session is opened here and the paper re-fetched, so tool queries /
+    attribute access never hit a detached instance.
     """
     from app.core.database import SessionLocal
     from app.services.llm import LLMService
@@ -998,8 +1013,14 @@ def _agent_stream(paper: Paper, db: Session, message: str):
         for i in range(0, len(text), size):
             yield text[i : i + size]
 
+    sdb = SessionLocal()
     try:
-        executor = AgentExecutor(paper, db)
+        paper = sdb.query(Paper).filter(Paper.id == paper_id).first()
+        if not paper:
+            yield _sse("error", {"detail": "论文不存在或已被删除"})
+            return
+
+        executor = AgentExecutor(paper, sdb)
         messages = [
             {"role": "system", "content": AGENT_SYSTEM_PROMPT + f"\n\n当前论文标题：{paper.title}"},
             {"role": "user", "content": message},
@@ -1087,21 +1108,17 @@ def _agent_stream(paper: Paper, db: Session, message: str):
         for piece in _chunk(final_text):
             yield _sse("delta", {"text": piece})
 
-        # Persist assistant message
-        sdb = SessionLocal()
-        msg_id = None
-        try:
-            assistant_msg = ChatMessage(paper_id=paper.id, role="assistant", content=final_text)
-            sdb.add(assistant_msg)
-            sdb.commit()
-            msg_id = assistant_msg.id
-        finally:
-            sdb.close()
+        # Persist assistant message (reuse the session opened above)
+        assistant_msg = ChatMessage(paper_id=paper.id, role="assistant", content=final_text)
+        sdb.add(assistant_msg)
+        sdb.commit()
 
-        yield _sse("done", {"message_id": msg_id, "reply": final_text})
+        yield _sse("done", {"message_id": assistant_msg.id, "reply": final_text})
 
     except Exception as e:
         yield _sse("error", {"detail": f"Agent 执行失败: {str(e)}"})
+    finally:
+        sdb.close()
 
 
 @router.post("/papers/{paper_id}/chat/stream")
@@ -1132,7 +1149,7 @@ def chat_with_paper_stream(
     # Agent (auto) mode — LLM decides tools to call
     if data.mode == "auto":
         return StreamingResponse(
-            _agent_stream(paper, db, data.message),
+            _agent_stream(paper_id, data.message),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )

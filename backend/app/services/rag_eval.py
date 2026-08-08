@@ -160,7 +160,13 @@ def _filter_chunks(chunks: list[dict]) -> list[dict]:
 
 
 def _sample_chunks(chunks: list[dict], sample_size: int) -> list[dict]:
-    """Evenly spread `sample_size` chunks across the paper (keeps order)."""
+    """Evenly spread `sample_size` chunks across the paper (keeps order).
+
+    `sample_size == 1` would divide by zero in the stride math, so it is
+    special-cased to the first chunk instead of crashing the eval run.
+    """
+    if sample_size <= 1:
+        return chunks[:1]
     if len(chunks) <= sample_size:
         return chunks
     idx = sorted(

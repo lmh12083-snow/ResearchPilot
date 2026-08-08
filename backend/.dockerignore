@@ -1,0 +1,13 @@
+# Runtime data & secrets — never baked into the image
+venv
+chroma_db
+uploads
+.env
+researchpilot.db
+
+# VCS & tooling
+.git
+.gitignore
+__pycache__
+*.pyc
+.pytest_cache

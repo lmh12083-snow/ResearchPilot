@@ -15,7 +15,7 @@
 
         <div class="sample-field">
           <span class="sample-label">每篇抽样题数</span>
-          <el-input-number v-model="sampleSize" :min="1" :max="20" :step="1" />
+          <el-input-number v-model="sampleSize" :min="2" :max="20" :step="1" />
         </div>
 
         <el-button
