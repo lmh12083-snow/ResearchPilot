@@ -24,7 +24,7 @@ Built with **FastAPI · Vue 3 · ChromaDB · DeepSeek**.
 - SSE **token streaming** with per-answer **citations** back to page / chunk, and no-answer fallback suggestions.
 
 ### 3. Hybrid retrieval & reranking
-Dense vectors (ChromaDB) + **BM25** sparse keyword matching, fused by **Reciprocal Rank Fusion (RRF)**, then re-ranked by a **cross-encoder** (`mmarco-mMiniLMv2-L12-H384-v1`). CJK-aware tokenization.
+Dense vectors (ChromaDB) + **BM25** sparse keyword matching, fused by **Reciprocal Rank Fusion (RRF)**, then re-ranked by a **cross-encoder** (`mmarco-mMiniLMv2-L12-H384-v1`). CJK-aware tokenization. Chunking is **sentence-boundary-aware** (overlap carries a complete sentence into the next chunk, never a half-word) and strips PDF **layout noise before embedding** (page numbers, table cells, figure-diagram labels, fragmented equations, title/author front-matter), so the index contains clean body prose.
 
 ### 4. Multi-agent paper analysis
 Instead of one monolithic LLM call, a **Planner** generates per-dimension retrieval queries, then **parallel specialists** each analyze one dimension against targeted context (innovation / methods / experiments / limitations / related work), and an **Aggregator** merges them into an 8-field structured analysis (plus abstract, pros & cons, one-line summary).
@@ -41,9 +41,12 @@ Streams a full survey document: **Planner** proposes the section outline → int
 Annotate papers — capture selected text as an anchor, add notes and tags, or let the **LLM summarize** key points. Export everything as structured **Markdown** grouped by project and paper.
 
 ### 8. RAG evaluation
-Self-contained evaluation harness: **LLM-generates a validated test set** from your own papers, then measures **hit@1/3/5, MRR, answer accuracy, and faithfulness** (LLM-as-judge) in background jobs with live progress. No external benchmark data needed. Questions are filtered for validity (answerable from their source chunk) and reference/bibliography sections are excluded, so metrics reflect real content retrieval.
+Self-contained harnesses (no external benchmark data), both with LLM-as-judge:
 
-Measured on 32 validated questions across 2 papers: the production hybrid pipeline lifts **hit@1 from 31% → 66%, hit@5 from 59% → 91%, MRR 0.41 → 0.77** vs. pure dense retrieval, with **84% answer accuracy and 88% faithfulness**.
+- **Manual Chinese test set** (primary): 40 hand-written questions over 2 papers — 32 positive (gold chunk labeled, Chinese reference answers) + 8 **negative** (unanswerable, to measure hallucination). Metrics: **hit@k / MRR, faithfulness, answer correctness (1–5), reject rate**. Aligned to production (`rerank=True`), the hybrid pipeline beats pure dense: **hit@5 81.2% vs 75%, MRR 0.61 vs 0.45**, faithfulness 87.5%, answer correctness 4.44/5, and **100% correct rejection on all 8 negative samples** (zero hallucination).
+- **LLM self-generated set** (relative comparison): validity-filtered auto-generated questions for fast iteration, e.g. hit@1 31% → 66%, hit@5 59% → 91%, MRR 0.41 → 0.77 vs pure dense (optimistic by construction).
+
+Error cases are attributed one-by-one (`docs/error_case_analysis.md`) and findings feed back into production: reference-list filtering in `hybrid_search`, then **sentence-boundary-aware chunking + layout-noise filtering** (tables, figure-diagram labels, page numbers, front-matter), which lifted hybrid hit@5 from **75% → 81.2%** on the manual set.
 
 ### 9. Dashboard, account & usage
 Project/paper dashboards, avatar upload, profile & password management, and per-feature **LLM token usage tracking**.
@@ -198,5 +201,6 @@ ResearchPilot/
 - [x] Reading notes + AI summarize + Markdown export
 - [x] RAG evaluation (self-generated test set, LLM judge)
 - [x] Settings (avatar / profile / password) & LLM usage stats
-- [ ] Feedback loop: promote eval failures into better chunking/retrieval
+- [x] Feedback loop: promote eval failures into better chunking/retrieval (hybrid hit@5 75% → 81.2%)
+- [ ] Multilingual reranker (current cross-encoder is English-dominant — most remaining retrieval misses are a Chinese-rerank weakness)
 - [ ] Batch literature-review over the full project

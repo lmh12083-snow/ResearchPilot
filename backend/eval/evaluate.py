@@ -222,7 +222,7 @@ def main() -> None:
 
         # 1. Retrieval comparison (positive questions get a gold rank; negatives don't)
         vec = _vector_retrieve(question, pid, args.top_k)
-        hyb = hybrid_search(question, paper_id=pid, top_k=args.top_k, rerank=False)
+        hyb = hybrid_search(question, paper_id=pid, top_k=args.top_k, rerank=True)
         vec_rank = hyb_rank = None
         if gt is not None:
             vec_rank = _rank_of_ground_truth([r["id"] for r in vec], gt)

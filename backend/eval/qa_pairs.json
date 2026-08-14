@@ -3,112 +3,112 @@
     "id": 1,
     "paper_id": 1,
     "question": "什么是 RAG？",
-    "ground_truth_chunk": 33,
+    "ground_truth_chunk": 27,
     "reference": "RAG 是一种检索增强生成模型，将封闭式（仅参数化）方法的生成灵活性与基于检索方法的准确性相结合。它联合训练一个检索器和一个生成器。"
   },
   {
     "id": 2,
     "paper_id": 1,
     "question": "RAG 中 BART 生成器的参数如何作为参数化记忆使用？",
-    "ground_truth_chunk": 20,
+    "ground_truth_chunk": 16,
     "reference": "BART 生成器的参数被称作 RAG 的参数化记忆。RAG 将这种参数化记忆与非参数化记忆（检索到的文档）相结合。"
   },
   {
     "id": 3,
     "paper_id": 1,
     "question": "非参数化记忆索引由什么构成、如何存储？",
-    "ground_truth_chunk": 124,
+    "ground_truth_chunk": 102,
     "reference": "非参数化记忆索引不是可训练参数，由 2100 万个 728 维向量构成，共 15.3B 个数值。这些向量可以用 8 位浮点精度存储，以控制内存和磁盘占用。"
   },
   {
     "id": 4,
     "paper_id": 1,
     "question": "RAG-Sequence 与 RAG-Token 的区别是什么？",
-    "ground_truth_chunk": 15,
+    "ground_truth_chunk": 12,
     "reference": "RAG-Sequence 用同一个检索文档生成整个序列（该文档是一个潜在变量）；RAG-Token 则可以为每个目标 token 使用不同的文档。"
   },
   {
     "id": 5,
     "paper_id": 1,
     "question": "开放域问答实验使用了哪些数据集？",
-    "ground_truth_chunk": 25,
+    "ground_truth_chunk": 20,
     "reference": "四个常用的开放域问答数据集：Natural Questions (NQ)、TriviaQA (TQA)、WebQuestions (WQ) 和 CuratedTrec (CT)，并报告 Exact Match (EM) 分数。"
   },
   {
     "id": 6,
     "paper_id": 1,
     "question": "检索器如何初始化和训练？",
-    "ground_truth_chunk": 19,
+    "ground_truth_chunk": 15,
     "reference": "检索器是来自 DPR 的预训练双编码器，训练目标是检索包含 TriviaQA 和 Natural Questions 答案的文档，并用于构建稠密文档索引。"
   },
   {
     "id": 7,
     "paper_id": 1,
     "question": "生成器组件使用哪个预训练 seq2seq transformer？",
-    "ground_truth_chunk": 19,
+    "ground_truth_chunk": 15,
     "reference": "BART-large，一个预训练序列到序列 transformer。原则上任何编码器-解码器都可以使用。"
   },
   {
     "id": 8,
     "paper_id": 1,
     "question": "RAG 中的 null document（空文档）机制是什么？",
-    "ground_truth_chunk": 120,
+    "ground_truth_chunk": 99,
     "reference": "它用于建模检索不到有用信息的情况。除了 k 个真实检索文档外，还会额外“检索”一个空文档，模型在 k+1 个预测上进行边际化。"
   },
   {
     "id": 9,
     "paper_id": 1,
     "question": "BART 是如何预训练以用于 RAG 的？",
-    "ground_truth_chunk": 20,
+    "ground_truth_chunk": 16,
     "reference": "BART 使用去噪目标以及多种不同的加噪函数进行预训练。"
   },
   {
     "id": 10,
     "paper_id": 1,
     "question": "RAG 与仅参数化方法相比如何？",
-    "ground_truth_chunk": 33,
+    "ground_truth_chunk": 27,
     "reference": "RAG 兼具封闭式（仅参数化）方法的生成灵活性与基于检索方法的准确性，生成的文本更符合事实、更可控。"
   },
   {
     "id": 11,
     "paper_id": 1,
     "question": "RAG 在 TriviaQA 和 FEVER 上的表现如何？",
-    "ground_truth_chunk": 11,
+    "ground_truth_chunk": 9,
     "reference": "RAG 在 TriviaQA 上大幅优于使用专门预训练目标的最新方法；在 FEVER 事实验证上与使用强检索监督的 SOTA 流水线模型差距在 4.3% 以内。"
   },
   {
     "id": 12,
     "paper_id": 1,
     "question": "论文中用 MSMARCO NLG v2.1 做什么任务？",
-    "ground_truth_chunk": 26,
+    "ground_truth_chunk": 22,
     "reference": "用于测试 RAG 在知识密集型场景下的自然语言生成（NLG）能力，把 MSMARCO 当作开放域抽象式问答任务。"
   },
   {
     "id": 13,
     "paper_id": 1,
     "question": "开放域问答报告什么评估指标？",
-    "ground_truth_chunk": 25,
+    "ground_truth_chunk": 20,
     "reference": "开放域问答数据集报告 Exact Match (EM) 分数。"
   },
   {
     "id": 14,
     "paper_id": 1,
     "question": "RAG 如何微调到新任务？",
-    "ground_truth_chunk": 9,
+    "ground_truth_chunk": 7,
     "reference": "和 T5、BART 类似，RAG 可以微调到任何 seq2seq 任务，其中生成器和检索器联合学习。"
   },
   {
     "id": 15,
     "paper_id": 1,
     "question": "外部知识如何帮助 RAG 减少幻觉？",
-    "ground_truth_chunk": 66,
+    "ground_truth_chunk": 53,
     "reference": "访问外部知识（这里是维基百科）使 RAG 产生更少幻觉，生成的文本更符合事实、更可解释。"
   },
   {
     "id": 16,
     "paper_id": 1,
     "question": "RAG 在开放域问答上取得了什么主要结果？",
-    "ground_truth_chunk": 64,
+    "ground_truth_chunk": 51,
     "reference": "RAG 模型在开放域问答上取得了 SOTA 结果。"
   },
   {
@@ -122,105 +122,105 @@
     "id": 18,
     "paper_id": 2,
     "question": "Fusion-in-Decoder 方法的流程是什么？",
-    "ground_truth_chunk": 4,
+    "ground_truth_chunk": 3,
     "reference": "先从外部知识源（如维基百科）检索支持文本段落，再由生成式编码器-解码器模型基于问题与检索到的段落生成答案。性能会随检索段落数量的增加而持续提升，最多可检索到 100 个段落。"
   },
   {
     "id": 19,
     "paper_id": 2,
     "question": "Fusion-in-Decoder 的架构（图 2）是怎样的？",
-    "ground_truth_chunk": 6,
+    "ground_truth_chunk": 5,
     "reference": "方法分两步：先用稀疏或稠密表示检索支持段落，再由序列到序列模型以检索段落加问题为输入生成答案。每个“问题+段落”独立经过一个编码器，所有编码结果拼接后交给解码器生成答案（即“融合在解码器”）。"
   },
   {
     "id": 20,
     "paper_id": 2,
     "question": "该方法在哪些基准上取得了 SOTA？还有什么观察？",
-    "ground_truth_chunk": 7,
+    "ground_truth_chunk": 6,
     "reference": "方法在 TriviaQA 和 Natural Questions 基准上取得新的 SOTA 结果；并且性能随检索段落数量的增加而显著提升，说明生成模型比抽取式模型更擅长综合多个段落的证据。"
   },
   {
     "id": 21,
     "paper_id": 2,
-    "question": "表 1 中 Fusion-in-Decoder (base) 和 (large) 在 NQ 与 TriviaQA 上的 EM 是多少？",
-    "ground_truth_chunk": 14,
-    "reference": "Fusion-in-Decoder (base) 在 NQ 和 TriviaQA 上分别为 48.2 和 65.0；(large) 分别为 51.4 和 67.6，均优于 RAG、T5、GPT-3 等方法。"
+    "question": "表 1 的标题与内容说明了什么？在 TriviaQA 上报告的是哪两类测试集的结果？",
+    "ground_truth_chunk": 12,
+    "reference": "表 1 的标题是 \"Comparison to state-of-the-art\"，将 Fusion-in-Decoder 与 DrQA、DPR、RAG、T5、GPT-3 等方法进行对比；在 TriviaQA 上分别报告了开放域测试集（left）与隐藏测试集（right）的结果。"
   },
   {
     "id": 22,
     "paper_id": 2,
     "question": "论文使用了哪两种段落检索方法？",
-    "ground_truth_chunk": 15,
+    "ground_truth_chunk": 12,
     "reference": "BM25 和 DPR。BM25 用词袋表示段落，基于词频与逆文档频率排序（使用 Apache Lucene 实现、SpaCy 分词）；DPR 用两个 BERT 网络分别计算问题和段落的稠密向量表示。"
   },
   {
     "id": 23,
     "paper_id": 2,
     "question": "DPR 如何计算表示和进行检索？",
-    "ground_truth_chunk": 16,
+    "ground_truth_chunk": 13,
     "reference": "DPR 用两个 BERT 网络分别把问题和段落表示为稠密向量，排序函数是查询表示与段落表示的点积；检索通过 FAISS 库进行近似最近邻搜索。"
   },
   {
     "id": 24,
     "paper_id": 2,
     "question": "生成模型以什么为输入？段落如何与问题拼接？",
-    "ground_truth_chunk": 17,
+    "ground_truth_chunk": 14,
     "reference": "生成模型基于在无监督数据上预训练的序列到序列网络（如 T5 或 BART），输入是问题以及支持段落。每个检索段落与其标题和问题拼接，并加入 question:、title:、context: 等特殊标记；各段落由编码器独立处理。"
   },
   {
     "id": 25,
     "paper_id": 2,
     "question": "编码器独立处理各段落带来什么好处？",
-    "ground_truth_chunk": 18,
+    "ground_truth_chunk": 15,
     "reference": "各段落独立编码、解码器联合融合的做法，使计算时间随段落数量线性增长而不是二次增长，从而可以扩展到大量上下文。"
   },
   {
     "id": 26,
     "paper_id": 2,
     "question": "实验使用了哪些数据集？",
-    "ground_truth_chunk": 19,
+    "ground_truth_chunk": 16,
     "reference": "NaturalQuestions（Google 搜索查询，开放域版本去掉超过 5 个 token 的答案）、TriviaQA（从问答与竞猜网站收集的问题，使用未过滤版本）、SQuAD v1.1（阅读理解数据集）。"
   },
   {
     "id": 27,
     "paper_id": 2,
     "question": "SQuAD 数据集是什么，实验用了哪些维基快照？",
-    "ground_truth_chunk": 21,
+    "ground_truth_chunk": 17,
     "reference": "SQuAD v1.1 是阅读理解数据集，标注者针对维基百科段落写问题，答案是段落中的一个 span。NQ 和 TriviaQA 使用 2018 年 12 月 20 日的维基百科快照，SQuAD 使用 2016 年 12 月 21 日的快照。"
   },
   {
     "id": 28,
     "paper_id": 2,
     "question": "答案如何评估与归一化？",
-    "ground_truth_chunk": 22,
+    "ground_truth_chunk": 18,
     "reference": "用标准 Exact Match (EM) 指标评估，生成答案与可接受答案列表中的任意一个在归一化后匹配即算正确。归一化包括转小写、去除冠词、标点及重复空白。"
   },
   {
     "id": 29,
     "paper_id": 2,
     "question": "模型的训练设置是什么？",
-    "ground_truth_chunk": 23,
+    "ground_truth_chunk": 19,
     "reference": "用预训练 T5 初始化，base 与 large 分别含 220M 和 770M 参数；用 Adam 优化，恒定学习率 1e-4，dropout 10%，训练 10k 步，batch size 64，使用 64 块 Tesla V100 32GB。"
   },
   {
     "id": 30,
     "paper_id": 2,
     "question": "训练和测试时检索多少段落？用什么方式生成答案？",
-    "ground_truth_chunk": 24,
+    "ground_truth_chunk": 20,
     "reference": "训练和测试默认检索 100 个段落，截断到 250 个词片；NQ 和 TriviaQA 用 DPR 检索，SQuAD 用 BM25 检索；使用贪心解码生成答案。"
   },
   {
     "id": 31,
     "paper_id": 2,
     "question": "与闭卷 T5 相比，检索带来的提升有多大？",
-    "ground_truth_chunk": 26,
+    "ground_truth_chunk": 22,
     "reference": "在 NaturalQuestions 上，闭卷 T5 模型（11B 参数）准确率为 36.6%，而本方法仅用 770M 参数加上维基百科（BM25 检索）就达到 44.1%，说明文本显式记忆在知识检索任务上有竞争力。"
   },
   {
     "id": 32,
     "paper_id": 2,
     "question": "增加检索段落数量对性能的影响？",
-    "ground_truth_chunk": 28,
+    "ground_truth_chunk": 23,
     "reference": "把检索段落从 10 增加到 100，TriviaQA 提升约 6%，NaturalQuestions 提升约 3.5%；而多数抽取式模型的性能在 10 到 20 个段落时就趋于饱和，说明 seq2seq 模型更擅长综合多段落信息。"
   },
   {
