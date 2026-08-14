@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     # Paper comparison
     COMPARE_MAX_PAPERS: int = 5  # max papers in one comparison
 
-    model_config = {"env_file": "../.env", "case_sensitive": True}
+    model_config = {"env_file": "../.env", "case_sensitive": True, "extra": "ignore"}
 
 
 settings = Settings()

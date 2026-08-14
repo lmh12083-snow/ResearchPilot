@@ -40,6 +40,13 @@ from app.services import rag_eval  # reuse _filter_chunks/_sample_chunks/_answer
 
 REPORT_PATH = Path(__file__).parent / "report.json"
 
+# LLM 自生成测试集存在乐观偏差，写入报告并打印警告。
+BIAS_NOTE = (
+    "测试集由 LLM 自生成：gold 片段即采样片段本身，问题也由同一 LLM 基于该片段生成，"
+    "因此检索与生成指标存在乐观偏差（分数偏高），只能反映不同检索方法/配置间的相对差异，"
+    "不代表绝对质量。请与人工评测集 backend/eval/qa_pairs.json 的结果对照解读。"
+)
+
 
 def _build_test_set(project_id: int, sample_per_paper: int):
     """Generate one question per sampled chunk for every completed paper."""
@@ -98,6 +105,30 @@ def _vector_retrieve(question: str, paper_id: int, top_k: int) -> list[dict]:
     return vs.similarity_search(emb, top_k=top_k, paper_id=paper_id)
 
 
+def _error_breakdown(rows: list[dict]) -> dict:
+    """Deterministic error classes from existing case fields (no extra LLM calls).
+
+    Priority: retrieval_miss > unjudged > answer_incorrect > unfaithful > ok.
+    `--no-judge` runs (or judge parse failures) land in `unjudged` so they are
+    not miscounted as ok or answer_incorrect.
+    """
+    counts = {"retrieval_miss": 0, "unjudged": 0, "answer_incorrect": 0, "unfaithful": 0, "ok": 0}
+    for r in rows:
+        if r["hyb_rank"] is None:
+            counts["retrieval_miss"] += 1
+        elif r["answer_correct"] is None:
+            counts["unjudged"] += 1
+        elif r["answer_correct"] is False:
+            counts["answer_incorrect"] += 1
+        elif r["faithful"] is False:
+            counts["unfaithful"] += 1
+        else:
+            counts["ok"] += 1
+    n = len(rows)
+    pcts = {k: (round(v / n * 100, 1) if n else 0.0) for k, v in counts.items()}
+    return {"counts": counts, "pcts": pcts}
+
+
 def _metrics(rows: list[dict]) -> dict:
     n = len(rows)
     if n == 0:
@@ -134,6 +165,8 @@ def main() -> None:
     parser.add_argument("--sample-per-paper", type=int, default=20)
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--no-judge", action="store_true", help="skip LLM answer/judge (retrieval only)")
+    parser.add_argument("--out", type=Path, default=REPORT_PATH,
+                        help="report output path (default: eval/report.json)")
     args = parser.parse_args()
 
     if not LLMService.available():
@@ -189,10 +222,13 @@ def main() -> None:
         "top_k": args.top_k,
         "sample_per_paper": args.sample_per_paper,
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "bias_note": BIAS_NOTE,
         **metrics,
+        "error_breakdown": _error_breakdown(rows),
         "cases": rows,
     }
-    REPORT_PATH.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print("\n" + "=" * 60)
     print(f"QA: {metrics['qa_count']}   top_k={args.top_k}   papers={len({i['paper_id'] for i in items})}   elapsed={round(time.time() - t0, 1)}s")
@@ -202,7 +238,12 @@ def main() -> None:
               f"hit@5={m['hit_at_5']:.3f} MRR={m['mrr']:.3f}")
     g = metrics["generation"]
     print(f"  generation: accuracy={g['answer_accuracy']} faithfulness={g['faithfulness']} (judged={g['judged']})")
-    print(f"\nReport written: {REPORT_PATH}")
+    eb = report["error_breakdown"]
+    print("  错误分类: " + "  ".join(
+        f"{k}={eb['counts'][k]} ({eb['pcts'][k]}%)" for k in eb["counts"]
+    ))
+    print("\n\033[93m[警告] " + BIAS_NOTE + "\033[0m")
+    print(f"\nReport written: {args.out}")
 
 
 if __name__ == "__main__":
