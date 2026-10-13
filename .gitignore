@@ -69,6 +69,5 @@ coverage.xml
 # ChromaDB vector store
 chroma_db/
 
-# Private / local-only files (keep off the public repo)
-docs/interview_prep.md
-.claude/settings.local.json
+# Local scratch assets (screenshots etc.)
+/image.png
